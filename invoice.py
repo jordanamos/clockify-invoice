@@ -11,6 +11,11 @@ class Invoice:
         self.client = Client(client_name)
         self.start_date = start_date
         self.end_date = end_date
+        self.time_entries = self.get_time_entries(self.start_date, self.end_date)
+
+    def get_time_entries(start_date, end_date):
+        pass
+        
 
 
 class Company:
