@@ -491,11 +491,11 @@
         },
         "tinycss2": {
             "hashes": [
-                "sha256:9f16c0a652838606c50b1b660c2021df608d9f7ec5a21673d8a35b0dad1b1718",
-                "sha256:b0e04b0d8682c96dabca57654d3650c2d79f8bd0f1a6fc57b0939598ec3f4f5e"
+                "sha256:2b80a96d41e7c3914b8cda8bc7f705a4d9c49275616e886103dd839dfc847847",
+                "sha256:8cff3a8f066c2ec677c06dbc7b45619804a6938478d9d73c284b29d14ecb0627"
             ],
             "markers": "python_version >= '3.7'",
-            "version": "==1.2.0"
+            "version": "==1.2.1"
         },
         "tomli": {
             "hashes": [

@@ -107,12 +107,12 @@
               <tr>
                 <td class="title">
                   <!-- <img src="https://www.sparksuite.com/images/logo.png" style="width: 100%; max-width: 300px" /> -->
-                  {{company.company_name}}
+                  {{invoice['company'].company_name}}
                 </td>
 
                 <td>
-                  <b>Invoice #: {{invoice_number}}</b><br />
-                  Date: {{invoice_date}}
+                  <b>Invoice #: {{invoice['invoice_number']}}</b><br />
+                  Date: {{invoice['invoice_date']}}
                 </td>
               </tr>
             </table>
@@ -124,14 +124,14 @@
             <table>
               <tr>
                 <td>
-                  ABN: {{company.abn}}<br />
-                  {{company.email}}
+                  ABN: {{invoice['company'].abn}}<br />
+                  {{invoice['company'].email}}
                 </td>
 
                 <td>
-                  {{client.client_contact}}<br />
-                  {{client.client_name}}<br />
-                  {{client.email}}
+                  {{invoice['client'].client_contact}}<br />
+                  {{invoice['client'].client_name}}<br />
+                  {{invoice['client'].email}}
                 </td>
               </tr>
             </table>
@@ -145,7 +145,7 @@
         <tr class="details">
           <td colspan="4">
             For the period:<br />
-            {{start_date}} to {{end_date}}
+            {{invoice['start_date']}} to {{invoice['end_date']}}
           </td>
           <td></td>
         </tr>
@@ -158,13 +158,15 @@
           <td>Amount</td>
         </tr>
 
+        {% for time_entry in invoice_time_entries %}
         <tr class="item">
-          <td>1876</td>
-          <td>HR Report and site filters and in UI 2</td>
-          <td>2.25</td>
-          <td>70</td>
-          <td>$140.00</td>
+          <td></td>
+          <td>{{invoice_time_entries[time_entry].description}}</td>
+          <td>{{invoice_time_entries[time_entry].duration}}</td>
+          <td>{{invoice['company'].rate}}</td>
+          <td></td>
         </tr>
+        {% endfor%}
 
         <tr class="item last">
           <td>1800</td>
