@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 import pandas as pd
 import requests
 import json
@@ -17,7 +17,7 @@ class Invoice:
 
     def get_time_entries(self):
         api_key = "NmViMDNlMjQtODY3OS00ODc0LTkzOTMtMDhmODAxZjcwOWJh"
-        url = "https://api.clockify.me/api/v1"
+        
         clockify_datetime_format = "%Y-%m-%dT%H:%M:%SZ"
         response_raw = requests.get(
             url + "/user",
@@ -40,6 +40,7 @@ class Invoice:
         d = response_raw.json()
 
         df = pd.json_normalize(d)
+        df = df[df.billable]
         df = df.drop(
             columns=[
                 "id",
@@ -49,16 +50,38 @@ class Invoice:
                 "customFieldValues",
                 "kioskId",
                 "workspaceId",
+                "type",
                 "billable",
                 "taskId",
                 "projectId",
+                "timeInterval.start",
             ],
             axis=1,
         )
-        pd.to_datetime(df["timeInterval.start"], format=clockify_datetime_format)
-        pd.to_datetime(df["timeInterval.end"], format=clockify_datetime_format)
-        pd.to_timedelta(df["timeInterval.duration"])
-        df.rename(columns={'timeInterval.duration"': "time"})
+
+        # df["timeInterval.start"] = pd.to_datetime(
+        #     df["timeInterval.start"], format=clockify_datetime_format
+        # )
+        df["timeInterval.end"] = pd.to_datetime(
+            df["timeInterval.end"], format=clockify_datetime_format
+        )
+        df["timeInterval.duration"] = pd.to_timedelta(df["timeInterval.duration"])
+        df.rename(
+            columns={
+                "timeInterval.duration": "time_taken",
+                # "timeInterval.start": "start",
+                "timeInterval.end": "date_completed",
+            },
+            inplace=True,
+        )
+
+        df = df.groupby("description").agg({"date_completed": "max", "time_taken": "sum"})
+        df["time_taken"] = df["time_taken"].dt.round("15min")
+        df.loc[df["time_taken"] == pd.Timedelta(0), "time_taken"] = pd.Timedelta(15, "m")
+        df["time_fraction"] = df["time_taken"] / pd.Timedelta(1, "h")
+        df["rate"] = self.company.rate
+        df["amount"] = df["time_fraction"] * df["rate"]
+ 
         return df
 
 
