@@ -27,7 +27,7 @@ class User():
         self.email = user["email"]
         self.active_workspace = user["activeWorkspace"]
         self.default_workspace = user["defaultWorkspace"]
-        self.timezone = user["settings"]["timeZone"]
+        self.timezone = user["settings"]["timeZone"] 
     
 
 
