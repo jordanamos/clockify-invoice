@@ -7,12 +7,13 @@ class APIServer:
 
     def __init__(self, api_key: str) -> None:
         self.api_key = api_key
-        self.user = User(self)
+        # self.user = User(self)
 
     def get(self, path: str, params: dict = None):
 
         if not params:
             params = {}
+
         raw_response = requests.get(
             self.api_base_url + path,
             headers={"X-Api-key": self.api_key, "content-type": "application/json"},
@@ -20,15 +21,15 @@ class APIServer:
         )
         return APIResponse(raw_response).parse()
 
-class User():
-    def __init__(self, APISession) -> None:
-        user = APISession.get("/user")
-        self.user_id = user["id"]
-        self.email = user["email"]
-        self.active_workspace = user["activeWorkspace"]
-        self.default_workspace = user["defaultWorkspace"]
-        self.timezone = user["settings"]["timeZone"] 
-    
+
+# class User:
+#     def __init__(self, APISession) -> None:
+#         user = APISession.get("/user")
+#         self.user_id = user["id"]
+#         self.email = user["email"]
+#         self.active_workspace = user["activeWorkspace"]
+#         self.default_workspace = user["defaultWorkspace"]
+#         self.timezone = user["settings"]["timeZone"]
 
 
 class APIResponse:
@@ -41,15 +42,12 @@ class APIResponse:
         else:
             error_response = self.parse_json(self.raw_response)
             # msg = f"APIResponse Error [{error_response['code']}] {error_response['message']}"
-            #TODO handle exceptions
+            # TODO handle exceptions
             raise Exception(error_response)
-    
+
     def parse_json(self, response):
         try:
             return response.json()
         except JSONDecodeError:
             msg = f"Unable to parse response as JSON: '{response}'"
             raise Exception(msg)
-
-
-

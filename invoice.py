@@ -1,87 +1,61 @@
-from datetime import date, timedelta
+from datetime import datetime, timedelta
 import pandas as pd
-import requests
-import json
+from client import APISession
 
 
 class Invoice:
+    invoice_date = datetime.today()
+
     def __init__(
-        self, company_name: str, client_name: str, start_date: date, end_date: date
+        self,
+        APISession,
+        company_name: str,
+        client_name: str,
+        start_date: datetime,
+        end_date: datetime,
     ):
         self.invoice_number = 1
-        self.invoice_date = date.today()
+        self.session = APISession
         self.company = Company(company_name)
         self.client = Client(client_name)
         self.start_date = start_date
         self.end_date = end_date
 
-    def get_time_entries(self):
-        api_key = "NmViMDNlMjQtODY3OS00ODc0LTkzOTMtMDhmODAxZjcwOWJh"
-        
-        clockify_datetime_format = "%Y-%m-%dT%H:%M:%SZ"
-        response_raw = requests.get(
-            url + "/user",
-            headers={"X-Api-key": api_key, "content-type": "application/json"},
-        )
+    def get_line_items(self) -> pd.DataFrame:
 
-        user_id = response_raw.json()["id"]
-        workspace_id = response_raw.json()["defaultWorkspace"]
+        time_entries = self.session.get_time_entries()
+        return self.get_line_items_for_period(time_entries)
 
-        params = {
-            "start": self.start_date.strftime(clockify_datetime_format),
-            "end": self.end_date.strftime(clockify_datetime_format),
-        }
-        response_raw = requests.get(
-            url + f"/workspaces/{workspace_id}/user/{user_id}/time-entries",
-            headers={"X-Api-key": api_key, "content-type": "application/json"},
-            params=params,
-        )
+    def get_line_items_for_period(self, time_entries):
 
-        d = response_raw.json()
-
-        df = pd.json_normalize(d)
-        df = df[df.billable]
-        df = df.drop(
-            columns=[
-                "id",
-                "tagIds",
-                "userId",
-                "isLocked",
-                "customFieldValues",
-                "kioskId",
-                "workspaceId",
-                "type",
-                "billable",
-                "taskId",
-                "projectId",
-                "timeInterval.start",
-            ],
-            axis=1,
-        )
-
-        # df["timeInterval.start"] = pd.to_datetime(
-        #     df["timeInterval.start"], format=clockify_datetime_format
-        # )
-        df["timeInterval.end"] = pd.to_datetime(
-            df["timeInterval.end"], format=clockify_datetime_format
-        )
-        df["timeInterval.duration"] = pd.to_timedelta(df["timeInterval.duration"])
+        df = pd.json_normalize(time_entries)
+        df[df.billable]
+        df[["description", "timeInterval.end", "timeInterval.duration"]]
         df.rename(
             columns={
-                "timeInterval.duration": "time_taken",
-                # "timeInterval.start": "start",
-                "timeInterval.end": "date_completed",
+                "timeInterval.duration": "time_spent",
+                "timeInterval.end": "item_date",
             },
             inplace=True,
         )
 
-        df = df.groupby("description").agg({"date_completed": "max", "time_taken": "sum"})
-        df["time_taken"] = df["time_taken"].dt.round("15min")
-        df.loc[df["time_taken"] == pd.Timedelta(0), "time_taken"] = pd.Timedelta(15, "m")
-        df["time_fraction"] = df["time_taken"] / pd.Timedelta(1, "h")
+        df["item_date"] = pd.to_datetime(
+            df["item_date"], format=self.session.clockify_datetime_format
+        )
+        df["time_spent"] = pd.to_timedelta(df["time_spent"])
+
+        df = df.groupby("description").agg({"item_date": "max", "time_spent": "sum"})
+
+        df[(df["item_date"] > self.start_date) & (df["item_date"] < self.end_date)]
+
+        df["time_spent"] = df["time_spent"].dt.round("15min")
+        df.loc[df["time_spent"] == pd.Timedelta(0), "time_spent"] = pd.Timedelta(
+            15, "m"
+        )
+
+        df["time_spent_frac"] = df["time_spent"] / pd.Timedelta(1, "h")
         df["rate"] = self.company.rate
-        df["amount"] = df["time_fraction"] * df["rate"]
- 
+        df["amount"] = df["time_spent_frac"] * df["rate"]
         return df
 
 
