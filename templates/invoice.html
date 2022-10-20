@@ -162,9 +162,9 @@
         <tr class="item">
           <td></td>
           <td>{{invoice_time_entries[time_entry].description}}</td>
-          <td>{{invoice_time_entries[time_entry].duration}}</td>
-          <td>{{invoice['company'].rate}}</td>
-          <td></td>
+          <td>{{invoice_time_entries[time_entry].time_spent_frac}}</td>
+          <td>{{invoice_time_entries[time_entry].rate}}</td>
+          <td>${{invoice_time_entries[time_entry].amount}}</td>
         </tr>
         {% endfor%}
 
@@ -181,7 +181,7 @@
           <td></td>
           <td></td>
           <td></td>
-          <td>Total: $385.00</td>
+          <td>Total: ${{invoice['total']}}</td>
         </tr>
       </table>
     </div>

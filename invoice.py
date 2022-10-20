@@ -1,5 +1,5 @@
-from datetime import datetime
 import pandas as pd
+from datetime import date
 from clockify.client import APISession
 
 
@@ -10,16 +10,16 @@ class Invoice:
     """
 
     # TODO handle timezones
-    invoice_date = datetime.today()
-
+    date_format = "%d-%M-%yyyy"
     def __init__(
         self,
         APISession: APISession,
         company_name: str,
         client_name: str,
-        start_date: datetime,
-        end_date: datetime,
+        start_date: date,
+        end_date: date,
     ):
+        self.invoice_date = date.today()
         self.invoice_number = 1
         self.session = APISession
         self.company = Company(company_name)
@@ -27,44 +27,61 @@ class Invoice:
         self.start_date = start_date
         self.end_date = end_date
 
-    def get_line_items(self) -> pd.DataFrame:
+    @property
+    def line_items(self) -> pd.DataFrame:
 
+        # TODO add params for end date <= self.end_date for ?improved? performance with historic requests
         time_entries = self.session.get_time_entries()
-        return self.get_line_items_for_period(time_entries)
+        return self.get_billable_items(time_entries)
 
-    def get_line_items_for_period(self, time_entries) -> pd.DataFrame:
+    @property
+    def total(self) -> float:
+        return self.line_items["amount"].sum()
+
+    def get_billable_items(self, time_entries) -> pd.DataFrame:
+
+        # pd.options.display.float_format = "{:,.2f}".format
 
         df = pd.json_normalize(time_entries)
+        # filter rows to billable only
         df[df.billable]
         df[["description", "timeInterval.end", "timeInterval.duration"]]
         df.rename(
             columns={
-                "timeInterval.duration": "time_spent",
                 "timeInterval.end": "item_date",
+                "timeInterval.duration": "time_spent",
             },
             inplace=True,
         )
 
+        # convert item date to date
         df["item_date"] = pd.to_datetime(
             df["item_date"], format=self.session.clockify_datetime_format
         ).dt.date
 
+        # convert time spent to time delta
         df["time_spent"] = pd.to_timedelta(df["time_spent"])
 
+        # group items together, getting the max item date (the date the item was complete)
+        # and the sum of time taken (what we will use to bill)
         df = df.groupby("description").agg({"item_date": "max", "time_spent": "sum"})
-        # df = df.reset_index().set_index("item_date", drop=False)
         df = df.loc[
             (df["item_date"] >= self.start_date) & (df["item_date"] <= self.end_date)
         ]
 
+        # round the time spent to the nearest 15mins. if 0, set to 15mins. (nothing is for free!)
         df["time_spent"] = df["time_spent"].dt.round("15min")
-
         df.loc[df["time_spent"] == pd.Timedelta(0), "time_spent"] = pd.Timedelta(
             15, "m"
         )
+
+        # generate additional invoicing related columns
         df["time_spent_frac"] = df["time_spent"] / pd.Timedelta(1, "h")
         df["rate"] = self.company.rate
         df["amount"] = df["time_spent_frac"] * df["rate"]
+
+        df.reset_index(inplace=True)
+
         return df
 
 

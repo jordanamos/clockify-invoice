@@ -14,50 +14,31 @@ app = Flask(__name__)
 
 @app.route("/")
 def hello_world():
+    api_key = "NmViMDNlMjQtODY3OS00ODc0LTkzOTMtMDhmODAxZjcwOWJh"
+
+    outfile_directory = "./invoices/"
+    invoice_name = "invoice.pdf"
+
+    session = APISession(APIServer(api_key))
     company = "Jordan Amos"
     client = "6 Cloud Systems"
-    start_date = date(2022, 9, 1)
-    end_date = date(2022, 10, 1)
-
-    # invoice = Invoice(company, client, start_date, end_date)
-
-    # time_entries = invoice.get_time_entries()
+    start_date = date(2023, 8, 1)
+    end_date = date(2023, 8, 30)
+    invoice = Invoice(session, company, client, start_date, end_date)
+    print(invoice.line_items.to_dict(orient="index"))
 
     # return render_template(
     #     "invoice.html",
     #     invoice=invoice.__dict__,
-    #     invoice_time_entries=time_entries.to_dict("index"),
+    #     invoice_time_entries=invoice.line_items.to_dict(orient="index"),
     # )
 
 
 if __name__ == "__main__":
 
-    outfile_directory = "./invoices/"
-    invoice_name = "invoice.pdf"
+    hello_world()
 
-    api_key = "NmViMDNlMjQtODY3OS00ODc0LTkzOTMtMDhmODAxZjcwOWJh"
-
-    session = APISession(APIServer(api_key))
-    company = "Jordan Amos"
-    client = "6 Cloud Systems"
-    start_date = date(2022, 9, 1)
-    end_date = date(2022, 9, 30)
-    invoice = Invoice(session, company, client, start_date, end_date)
-    print(invoice.get_line_items())
-
-    # hello_world()
-    # client = ClockifyAPI(url, api_key)
-    # company = "Jordan Amos"
-    # client = "6 Cloud Systems"
-    # start_date = datetime(2022, 9, 1)
-    # end_date = datetime(2022, 9, 30)
-
-    # invoice = Invoice(company, client, start_date, end_date)
-    # time_entries = invoice.get_time_entries()
-    # print(time_entries.to_dict("index"))
-    # print(df)
-
-    # html = HTML("templates/invoice.html")
-    # html.write_pdf(outfile_directory + invoice_name)
-    # port = int(os.environ.get("PORT", 5000))
-    # app.run(host="0.0.0.0", port=port)
+# html = HTML("templates/invoice.html")
+# html.write_pdf(outfile_directory + invoice_name)
+# port = int(os.environ.get("PORT", 5000))
+# app.run(host="0.0.0.0", port=port, debug=True)
