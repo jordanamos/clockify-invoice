@@ -1,9 +1,16 @@
 from datetime import datetime, timedelta
+from numpy import datetime64
 import pandas as pd
 from client import APISession
 
 
 class Invoice:
+    """
+    A Class representation of an Invoice with clockify line items
+
+    """
+
+    # TODO handle timezones
     invoice_date = datetime.today()
 
     def __init__(
@@ -26,7 +33,7 @@ class Invoice:
         time_entries = self.session.get_time_entries()
         return self.get_line_items_for_period(time_entries)
 
-    def get_line_items_for_period(self, time_entries):
+    def get_line_items_for_period(self, time_entries) -> pd.DataFrame:
 
         df = pd.json_normalize(time_entries)
         df[df.billable]
@@ -41,18 +48,21 @@ class Invoice:
 
         df["item_date"] = pd.to_datetime(
             df["item_date"], format=self.session.clockify_datetime_format
-        )
+        ).dt.date
+
         df["time_spent"] = pd.to_timedelta(df["time_spent"])
 
         df = df.groupby("description").agg({"item_date": "max", "time_spent": "sum"})
-
-        df[(df["item_date"] > self.start_date) & (df["item_date"] < self.end_date)]
+        # df = df.reset_index().set_index("item_date", drop=False)
+        df = df.loc[
+            (df["item_date"] >= self.start_date) & (df["item_date"] <= self.end_date)
+        ]
 
         df["time_spent"] = df["time_spent"].dt.round("15min")
+
         df.loc[df["time_spent"] == pd.Timedelta(0), "time_spent"] = pd.Timedelta(
             15, "m"
         )
-
         df["time_spent_frac"] = df["time_spent"] / pd.Timedelta(1, "h")
         df["rate"] = self.company.rate
         df["amount"] = df["time_spent_frac"] * df["rate"]

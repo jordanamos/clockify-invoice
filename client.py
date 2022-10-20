@@ -3,6 +3,10 @@ from datetime import date, datetime
 
 
 class APISession:
+    """
+    Handles all the GET requests to the Clockify API
+
+    """
 
     clockify_datetime_format = "%Y-%m-%dT%H:%M:%SZ"
 

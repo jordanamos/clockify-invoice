@@ -6,7 +6,7 @@ from flask import Flask, render_template
 from invoice import Invoice
 from api import APIServer
 from client import APISession
-from datetime import datetime
+from datetime import datetime, date
 
 
 app = Flask(__name__)
@@ -16,8 +16,8 @@ app = Flask(__name__)
 def hello_world():
     company = "Jordan Amos"
     client = "6 Cloud Systems"
-    start_date = datetime(2022, 9, 1)
-    end_date = datetime(2022, 10, 1)
+    start_date = date(2022, 9, 1)
+    end_date = date(2022, 10, 1)
 
     # invoice = Invoice(company, client, start_date, end_date)
 
@@ -40,11 +40,13 @@ if __name__ == "__main__":
     session = APISession(APIServer(api_key))
     company = "Jordan Amos"
     client = "6 Cloud Systems"
-    start_date = datetime(2022, 9, 1)
-    end_date = datetime(2022, 10, 1)
+    start_date = date(2022, 9, 1)
+    end_date = date(2022, 9, 30)
     invoice = Invoice(session, company, client, start_date, end_date)
-
     print(invoice.get_line_items())
+    
+
+    
     # hello_world()
     # client = ClockifyAPI(url, api_key)
     # company = "Jordan Amos"
