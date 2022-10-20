@@ -1,7 +1,6 @@
-from datetime import datetime, timedelta
-from numpy import datetime64
+from datetime import datetime
 import pandas as pd
-from client import APISession
+from clockify.client import APISession
 
 
 class Invoice:
@@ -15,7 +14,7 @@ class Invoice:
 
     def __init__(
         self,
-        APISession,
+        APISession: APISession,
         company_name: str,
         client_name: str,
         start_date: datetime,

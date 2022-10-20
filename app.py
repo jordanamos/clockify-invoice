@@ -4,8 +4,8 @@ import os
 # from weasyprint import HTML
 from flask import Flask, render_template
 from invoice import Invoice
-from api import APIServer
-from client import APISession
+from clockify.client import APISession
+from clockify.api import APIServer
 from datetime import datetime, date
 
 
@@ -44,9 +44,7 @@ if __name__ == "__main__":
     end_date = date(2022, 9, 30)
     invoice = Invoice(session, company, client, start_date, end_date)
     print(invoice.get_line_items())
-    
 
-    
     # hello_world()
     # client = ClockifyAPI(url, api_key)
     # company = "Jordan Amos"
