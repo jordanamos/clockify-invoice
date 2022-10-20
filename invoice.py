@@ -10,7 +10,8 @@ class Invoice:
     """
 
     # TODO handle timezones
-    date_format = "%d-%M-%yyyy"
+    date_display_format = "%d/%m/%Y"
+
     def __init__(
         self,
         APISession: APISession,
@@ -26,6 +27,8 @@ class Invoice:
         self.client = Client(client_name)
         self.start_date = start_date
         self.end_date = end_date
+        self._line_items = self.line_items.to_dict(orient="index")
+        self._total = self.total
 
     @property
     def line_items(self) -> pd.DataFrame:

@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>A simple, clean, and responsive HTML invoice template</title>
+    <title>Invoice</title>
 
     <style>
       @page {
@@ -112,7 +112,7 @@
 
                 <td>
                   <b>Invoice #: {{invoice['invoice_number']}}</b><br />
-                  Date: {{invoice['invoice_date']}}
+                  Date: {{invoice['invoice_date'] | format_date}}
                 </td>
               </tr>
             </table>
@@ -145,7 +145,8 @@
         <tr class="details">
           <td colspan="4">
             For the period:<br />
-            {{invoice['start_date']}} to {{invoice['end_date']}}
+            {{invoice['start_date'] | format_date}} to {{invoice['end_date'] |
+            format_date}}
           </td>
           <td></td>
         </tr>
@@ -158,30 +159,22 @@
           <td>Amount</td>
         </tr>
 
-        {% for time_entry in invoice_time_entries %}
-        <tr class="item">
+        {% for line_item in invoice['_line_items'] %}
+        <tr class="item {% if loop.last %}last{% endif %}">
           <td></td>
-          <td>{{invoice_time_entries[time_entry].description}}</td>
-          <td>{{invoice_time_entries[time_entry].time_spent_frac}}</td>
-          <td>{{invoice_time_entries[time_entry].rate}}</td>
-          <td>${{invoice_time_entries[time_entry].amount}}</td>
+          <td>{{invoice['_line_items'][line_item].description}}</td>
+          <td>{{invoice['_line_items'][line_item].time_spent_frac}}</td>
+          <td>{{invoice['_line_items'][line_item].rate}}</td>
+          <td>${{invoice['_line_items'][line_item].amount}}</td>
         </tr>
         {% endfor%}
-
-        <tr class="item last">
-          <td>1800</td>
-          <td>HR Report and site filters and in UI 2</td>
-          <td>2.75</td>
-          <td>70</td>
-          <td>$140.00</td>
-        </tr>
 
         <tr class="total">
           <td></td>
           <td></td>
           <td></td>
           <td></td>
-          <td>Total: ${{invoice['total']}}</td>
+          <td>Total: ${{invoice['_total']}}</td>
         </tr>
       </table>
     </div>
