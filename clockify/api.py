@@ -3,21 +3,23 @@ import requests
 
 
 class APIServer:
-    api_base_url = "https://api.clockify.me/api/v1"
+    api_base_endpoint = "https://api.clockify.me/api/v1"
 
     def __init__(self, api_key: str) -> None:
         self.api_key = api_key
         # self.user = User(self)
 
     def get(self, path: str, params: dict = None):
-
+        
+        url = self.api_base_endpoint + path
+        
         if not params:
             params = {}
 
         raw_response = requests.get(
-            self.api_base_url + path,
+            url,
             headers={"X-Api-key": self.api_key, "content-type": "application/json"},
-            params=params,
+            params=params
         )
         return APIResponse(raw_response).parse()
 

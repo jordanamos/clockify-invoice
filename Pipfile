@@ -6,8 +6,8 @@ name = "pypi"
 [packages]
 flask = "*"
 requests = "*"
-weasyprint = "*"
 pandas = "*"
+weasyprint = "*"
 
 [dev-packages]
 black = "*"
