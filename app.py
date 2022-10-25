@@ -1,20 +1,15 @@
 import os
 import io
+import json
 import calendar as cal
 from datetime import date, timedelta, datetime
-from weasyprint import HTML
 from flask import Flask, request, render_template, send_file, session, redirect
+from weasyprint import HTML
 from invoice import Invoice
-import json
 from clockify import client
 from clockify import api
 
-
 app = Flask(__name__)
-app.secret_key = "jordan"
-api_key = "NmViMDNlMjQtODY3OS00ODc0LTkzOTMtMDhmODAxZjcwOWJh"
-clockify_session = client.APISession(api.APIServer(api_key))
-
 
 @app.template_filter("format_date")
 def format_date(value, informat="%d/%m/%Y", outformat="%d/%m/%Y") -> str:
@@ -97,6 +92,8 @@ def process_invoice():
 
 
 if __name__ == "__main__":
-
+    app.secret_key = "jordan"
+    api_key = "NmViMDNlMjQtODY3OS00ODc0LTkzOTMtMDhmODAxZjcwOWJh"
+    clockify_session = client.APISession(api.APIServer(api_key))
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)
