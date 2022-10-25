@@ -3,7 +3,7 @@ import io
 import calendar as cal
 from datetime import date, timedelta, datetime
 from weasyprint import HTML
-from flask import Flask, request, render_template, send_file, session,redirect
+from flask import Flask, request, render_template, send_file, session, redirect
 from invoice import Invoice
 import json
 from clockify import client
@@ -27,7 +27,6 @@ def format_date(value, informat="%d/%m/%Y", outformat="%d/%m/%Y") -> str:
         return value.strftime(outformat)
 
 
-
 @app.route("/download", methods=["GET"])
 def download():
     if "invoice" in session:
@@ -38,8 +37,7 @@ def download():
             "display-form": "none",
         }
         rendered_invoice = render_template(
-            "invoice.html", invoice=invoice
-            , form_data=form_data
+            "invoice.html", invoice=invoice, form_data=form_data
         )
         html = HTML(string=rendered_invoice)
         rendered_pdf = html.write_pdf()
@@ -51,7 +49,8 @@ def download():
             as_attachment=True,
         )
     else:
-        redirect("/") 
+        redirect("/")
+
 
 @app.route("/", methods=["GET", "POST"])
 def process_invoice():
@@ -68,6 +67,7 @@ def process_invoice():
     if request.method == "POST":
         form_data.update(request.form)
 
+    invoice_number = form_data["invoice-number"]
     today = date.today()
     period_date = date(today.year, today.month, 1)
 
@@ -80,13 +80,18 @@ def process_invoice():
     )
 
     invoice = Invoice(
-        clockify_session, invoice_company, invoice_client, period_start, period_end
+        clockify_session,
+        invoice_number,
+        invoice_company,
+        invoice_client,
+        period_start,
+        period_end,
     )
 
     session["invoice"] = invoice.to_json()
     rendered_invoice = render_template(
         "invoice.html", invoice=invoice.__dict__, form_data=form_data
-    )  
+    )
 
     return rendered_invoice
 

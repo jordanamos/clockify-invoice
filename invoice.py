@@ -4,6 +4,7 @@ from clockify.client import APISession
 from clockify.api import APIServer
 import json
 
+
 class Invoice:
     """
     A Class representation of an Invoice with clockify line items
@@ -16,13 +17,14 @@ class Invoice:
     def __init__(
         self,
         APISession: APISession,
+        invoice_number: str,
         company_name: str,
         client_name: str,
         start_date: date,
         end_date: date,
     ):
         self.invoice_date = date.today()
-        self.invoice_number = 1
+        self.invoice_number = invoice_number
         self.session = APISession
         self.company = Company(company_name)
         self.client = Client(client_name)
@@ -90,16 +92,17 @@ class Invoice:
         return df
 
     def convert_data(self, o):
-        if isinstance (o, date):
+        if isinstance(o, date):
             return o.strftime(format="%d/%m/%Y")
         elif isinstance(o, (Client, Company, APISession, APIServer)):
             return o.__dict__
         else:
-            json.JSONEncoder.default(self,o)
+            json.JSONEncoder.default(self, o)
 
     def to_json(self):
-        return json.dumps(self.__dict__, default=self.convert_data,         
-            sort_keys=True, indent=4)
+        return json.dumps(
+            self.__dict__, default=self.convert_data, sort_keys=True, indent=4
+        )
 
     # def __dict__(self):
     #     return {
