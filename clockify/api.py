@@ -10,16 +10,16 @@ class APIServer:
         # self.user = User(self)
 
     def get(self, path: str, params: dict = None):
-        
+
         url = self.api_base_endpoint + path
-        
+
         if not params:
             params = {}
 
         raw_response = requests.get(
             url,
             headers={"X-Api-key": self.api_key, "content-type": "application/json"},
-            params=params
+            params=params,
         )
         return APIResponse(raw_response).parse()
 

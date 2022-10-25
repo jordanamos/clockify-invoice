@@ -1,7 +1,8 @@
 import pandas as pd
-from datetime import date
+from datetime import date, timedelta
 from clockify.client import APISession
-
+from clockify.api import APIServer
+import json
 
 class Invoice:
     """
@@ -83,9 +84,27 @@ class Invoice:
         df["rate"] = self.company.rate
         df["amount"] = df["time_spent_frac"] * df["rate"]
 
+        df = df.drop(columns=["time_spent", "item_date"])
         df.reset_index(inplace=True)
 
         return df
+
+    def convert_data(self, o):
+        if isinstance (o, date):
+            return o.strftime(format="%d/%m/%Y")
+        elif isinstance(o, (Client, Company, APISession, APIServer)):
+            return o.__dict__
+        else:
+            json.JSONEncoder.default(self,o)
+
+    def to_json(self):
+        return json.dumps(self.__dict__, default=self.convert_data,         
+            sort_keys=True, indent=4)
+
+    # def __dict__(self):
+    #     return {
+    #         "invoice_number": self.invoice_number
+    #     }
 
 
 class Company:
