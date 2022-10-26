@@ -1,5 +1,7 @@
 import pandas as pd
 from datetime import date, timedelta
+
+from requests import Session
 from clockify.client import APISession
 from clockify.api import APIServer
 import json
@@ -94,8 +96,10 @@ class Invoice:
     def convert_data(self, o):
         if isinstance(o, date):
             return o.strftime(format="%d/%m/%Y")
-        elif isinstance(o, (Client, Company, APISession, APIServer)):
+        elif isinstance(o, (Client, Company)):
             return o.__dict__
+        elif isinstance(o, (APISession, APIServer, Session)):
+            return str(o)
         else:
             json.JSONEncoder.default(self, o)
 

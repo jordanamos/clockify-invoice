@@ -7,7 +7,11 @@ class APIServer:
 
     def __init__(self, api_key: str) -> None:
         self.api_key = api_key
-        # self.user = User(self)
+        self.session = requests.Session()
+        self.session.headers = {
+            "X-Api-key": self.api_key,
+            "content-type": "application/json",
+        }
 
     def get(self, path: str, params: dict = None):
 
@@ -16,9 +20,8 @@ class APIServer:
         if not params:
             params = {}
 
-        raw_response = requests.get(
+        raw_response = self.session.get(
             url,
-            headers={"X-Api-key": self.api_key, "content-type": "application/json"},
             params=params,
         )
         return APIResponse(raw_response).parse()
@@ -53,3 +56,7 @@ class APIResponse:
         except JSONDecodeError:
             msg = f"Unable to parse response as JSON: '{response}'"
             raise Exception(msg)
+
+
+class APIKeyMissingError(Exception):
+    pass

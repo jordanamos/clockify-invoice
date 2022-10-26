@@ -11,6 +11,7 @@ from clockify import api
 
 app = Flask(__name__)
 
+
 @app.template_filter("format_date")
 def format_date(value, informat="%d/%m/%Y", outformat="%d/%m/%Y") -> str:
     if not isinstance(value, date):
@@ -92,8 +93,16 @@ def process_invoice():
 
 
 if __name__ == "__main__":
-    app.secret_key = "jordan"
-    api_key = "NmViMDNlMjQtODY3OS00ODc0LTkzOTMtMDhmODAxZjcwOWJh"
-    clockify_session = client.APISession(api.APIServer(api_key))
+
+    API_KEY = os.getenv("CLOCKIFY_API_KEY")
+    if API_KEY is None:
+        raise api.APIKeyMissingError(
+            """
+                Connection to Clockify's API requires an API Key which can be found in your user settings.
+                Be sure to set it as an environment variable on your system.
+            """
+        )
+    app.secret_key = API_KEY
+    clockify_session = client.APISession(api.APIServer(API_KEY))
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)
