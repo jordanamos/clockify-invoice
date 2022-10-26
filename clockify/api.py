@@ -1,5 +1,6 @@
-from json.decoder import JSONDecodeError
 import requests
+from json.decoder import JSONDecodeError
+from clockify.exceptions import ClockifyAPIException
 
 
 class APIServer:
@@ -50,13 +51,30 @@ class APIResponse:
             # TODO handle exceptions
             raise Exception(error_response)
 
-    def parse_json(self, response):
+    @staticmethod
+    def parse_json(response):
         try:
             return response.json()
         except JSONDecodeError:
-            msg = f"Unable to parse response as JSON: '{response}'"
-            raise Exception(msg)
+            msg = f"Unable to parse response as JSON: '{response.text}'"
+            raise APIResponseParseException(msg)
 
 
-class APIKeyMissingError(Exception):
+class APIException(ClockifyAPIException):
+    """Base exception for this module."""
+
+    pass
+
+
+class APIServerException(APIException):
+    """An exception in the API server itself, communicated in response by the API"""
+
+    pass
+
+
+class APIKeyMissingError(APIException):
+    pass
+
+
+class APIResponseParseException(APIException):
     pass
