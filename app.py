@@ -97,10 +97,8 @@ if __name__ == "__main__":
     API_KEY = os.getenv("CLOCKIFY_API_KEY")
     if API_KEY is None:
         raise api.APIKeyMissingError(
-            """
-                Connection to Clockify's API requires an API Key which can be found in your user settings.
-                Be sure to set it as an environment variable on your system.
-            """
+            """Connection to Clockify's API requires an API Key which can be
+                found in your user settings."""
         )
     app.secret_key = API_KEY
     clockify_session = client.APISession(api.APIServer(API_KEY))

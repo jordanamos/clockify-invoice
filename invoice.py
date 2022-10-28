@@ -1,5 +1,5 @@
 import pandas as pd
-from datetime import date, timedelta
+from datetime import date
 
 from requests import Session
 from clockify.client import APISession
@@ -38,7 +38,8 @@ class Invoice:
     @property
     def line_items(self) -> pd.DataFrame:
 
-        # TODO add params for end date <= self.end_date for ?improved? performance with historic requests
+        # TODO add params for end date <= self.end_date for ?improved?
+        # performance with historic requests
         time_entries = self.session.get_time_entries()
         return self.get_billable_items(time_entries)
 
