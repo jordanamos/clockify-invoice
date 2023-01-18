@@ -69,6 +69,10 @@ def process_invoice():
 
     if form_data["invoice-period"] == "last-month":
         period_date = period_date - timedelta(weeks=4)
+    if form_data["invoice-period"] == "two-months-ago":
+        period_date = period_date - timedelta(weeks=8)
+    if form_data["invoice-period"] == "three-months-ago":
+        period_date = period_date - timedelta(weeks=12)
 
     period_start = period_date.replace(day=1)
     period_end = period_date.replace(

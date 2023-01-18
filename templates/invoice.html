@@ -2,6 +2,7 @@
 <html>
   <head>
     <!-- Bootstrap 5 css  -->
+    <!-- https://getbootstrap.com/docs/5.0/getting-started/introduction/ -->
     <link
       href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css"
       rel="stylesheet"
@@ -17,7 +18,7 @@
 
     <meta charset="utf-8" />
 
-    <title>Invoice</title>
+    <title>Clockify Invoice</title>
 
     <style>
       @page {
@@ -151,15 +152,18 @@
                 >
                   <option {% if form_data['invoice-period'] == 'this-month' %} selected {% endif %}>This Month</option>
                   <option value="last-month" {% if form_data['invoice-period'] == 'last-month' %} selected {% endif %}>Last Month</option>
+                  <option value="two-months-ago" {% if form_data['invoice-period'] == 'two-months-ago' %} selected {% endif %}>2 Months Ago</option>
+                  <option value="three-months-ago" {% if form_data['invoice-period'] == 'three-months-ago' %} selected {% endif %}>3 Months Ago</option>
                 </select>
               </div>
-              <div class="d-block d-grid-md">
+              <div class="d-grid gap-2">
                 <button class="btn btn-primary btn-sm" type="submit">
                   Preview
                 </button>
-                <a class="btn btn-primary btn-sm" href="{{url_for('download')}}">Download</a>
-
-                <button class="btn btn-primary btn-sm" type="submit" disabled>
+                <a class="btn btn-success btn-sm" href="{{url_for('download')}}">
+                  Download
+                </a>
+                <button class="btn btn-secondary btn-sm" type="submit" disabled>
                   Email
                 </button>
               </div>
