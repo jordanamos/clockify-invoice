@@ -1,19 +1,32 @@
-import os
+import calendar as cal
 import io
 import json
-import calendar as cal
-from datetime import date, timedelta, datetime
-from flask import Flask, request, render_template, send_file, session, redirect
-from weasyprint import HTML
+import os
+from datetime import date
+from datetime import datetime
+from datetime import timedelta
+from typing import Any
+
+import api
+import client
+import werkzeug.wrappers
+from flask import Flask
+from flask import redirect
+from flask import render_template
+from flask import request
+from flask import send_file
+from flask import session
+from flask import wrappers
 from invoice import Invoice
-from clockify import client
-from clockify import api
+from weasyprint import HTML
 
 app = Flask(__name__)
 
 
 @app.template_filter("format_date")
-def format_date(value, informat="%d/%m/%Y", outformat="%d/%m/%Y") -> str:
+def format_date(
+    value: Any, informat: str = "%d/%m/%Y", outformat: str = "%d/%m/%Y"
+) -> str:
     if not isinstance(value, date):
         try:
             return datetime.strptime(value, informat).strftime(outformat)
@@ -24,11 +37,11 @@ def format_date(value, informat="%d/%m/%Y", outformat="%d/%m/%Y") -> str:
 
 
 @app.route("/download", methods=["GET"])
-def download():
+def download() -> wrappers.Response | werkzeug.wrappers.Response:
     if "invoice" in session:
         # invoice = json.loads(session.__dict__)
         invoice = json.loads(session.get("invoice"))
-        invoice_name = "invoice.pdf"
+        # invoice_name = "invoice.pdf"
         form_data = {
             "display-form": "none",
         }
@@ -38,19 +51,18 @@ def download():
         html = HTML(string=rendered_invoice)
         rendered_pdf = html.write_pdf()
 
-        return send_file(
-            io.BytesIO(rendered_pdf),
-            mimetype="application/pdf",
-            download_name=invoice_name,
-            as_attachment=True,
-        )
-    else:
-        redirect("/")
+        if rendered_pdf:
+            return send_file(
+                io.BytesIO(rendered_pdf),
+                mimetype="application/pdf",
+                # download_name=invoice_name,
+                as_attachment=True,
+            )
+    return redirect("/")
 
 
 @app.route("/", methods=["GET", "POST"])
-def process_invoice():
-
+def process_invoice() -> str:
     invoice_company = "Jordan Amos"
     invoice_client = "6 Cloud Systems"
 
@@ -97,12 +109,12 @@ def process_invoice():
 
 
 if __name__ == "__main__":
-
     API_KEY = os.getenv("CLOCKIFY_API_KEY")
     if API_KEY is None:
         raise api.APIKeyMissingError(
-            """'CLOCKIFY_API_KEY' environment variable not set. Connection to Clockify's API requires 
-            an API Key which can be found in your user settings."""
+            """'CLOCKIFY_API_KEY' environment variable not set.
+            Connection to Clockify's API requires an  API Key which can
+            be found in your user settings."""
         )
     app.secret_key = API_KEY
     clockify_session = client.APISession(api.APIServer(API_KEY))

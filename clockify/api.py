@@ -1,6 +1,10 @@
-import requests
+from __future__ import annotations
+
 from json.decoder import JSONDecodeError
-from clockify.exceptions import ClockifyAPIException
+from typing import Any
+
+import requests
+from exceptions import ClockifyAPIException
 
 
 class APIServer:
@@ -14,12 +18,8 @@ class APIServer:
             "content-type": "application/json",
         }
 
-    def get(self, path: str, params: dict = None):
-
+    def get(self, path: str, params: dict[str, str] = {}) -> dict[str, Any]:
         url = self.api_base_endpoint + path
-
-        if not params:
-            params = {}
 
         raw_response = self.session.get(
             url,
@@ -39,24 +39,24 @@ class APIServer:
 
 
 class APIResponse:
-    def __init__(self, raw_response) -> None:
+    def __init__(self, raw_response: requests.Response) -> None:
         self.raw_response = raw_response
 
-    def parse(self):
+    def parse(self) -> dict[str, Any]:
         if self.raw_response.status_code in [200, 201]:
-            return self.parse_json(self.raw_response)
+            return self.parse_json()
         else:
-            error_response = self.parse_json(self.raw_response)
-            # msg = f"APIResponse Error [{error_response['code']}] {error_response['message']}"
+            error_response = self.parse_json()
+            # msg = f"APIResponse Error [{error_response['code']}]
+            #  {error_response['message']}"
             # TODO handle exceptions
             raise Exception(error_response)
 
-    @staticmethod
-    def parse_json(response):
+    def parse_json(self) -> dict[str, Any]:
         try:
-            return response.json()
+            return self.raw_response.json()
         except JSONDecodeError:
-            msg = f"Unable to parse response as JSON: '{response.text}'"
+            msg = f"Unable to parse response as JSON: '{self.raw_response.text}'"
             raise APIResponseParseException(msg)
 
 
