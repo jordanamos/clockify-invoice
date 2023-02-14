@@ -1,10 +1,11 @@
-import pandas as pd
-from datetime import date
-
-from requests import Session
-from clockify.client import APISession
-from clockify.api import APIServer
 import json
+from datetime import date
+from typing import Any
+
+import pandas as pd
+from api import APIServer
+from client import APISession
+from requests import Session
 
 
 class Invoice:
@@ -37,7 +38,6 @@ class Invoice:
 
     @property
     def line_items(self) -> pd.DataFrame:
-
         # TODO add params for end date <= self.end_date for ?improved?
         # performance with historic requests
         time_entries = self.session.get_time_entries()
@@ -47,8 +47,7 @@ class Invoice:
     def total(self) -> float:
         return self.line_items["amount"].sum()
 
-    def get_billable_items(self, time_entries) -> pd.DataFrame:
-
+    def get_billable_items(self, time_entries: dict[str, Any]) -> pd.DataFrame:
         # pd.options.display.float_format = "{:,.2f}".format
 
         df = pd.json_normalize(time_entries)
@@ -71,14 +70,16 @@ class Invoice:
         # convert time spent to time delta
         df["time_spent"] = pd.to_timedelta(df["time_spent"])
 
-        # group items together, getting the max item date (the date the item was complete)
+        # group items together, getting the max item date
+        # (the date the item was complete)
         # and the sum of time taken (what we will use to bill)
         df = df.groupby("description").agg({"item_date": "max", "time_spent": "sum"})
         df = df.loc[
             (df["item_date"] >= self.start_date) & (df["item_date"] <= self.end_date)
         ]
 
-        # round the time spent to the nearest 15mins. if 0, set to 15mins. (nothing is for free!)
+        # round the time spent to the nearest 15mins.
+        # if nearest is 0, set to 15mins. (nothing is for free!)
         df["time_spent"] = df["time_spent"].dt.round("15min")
         df.loc[df["time_spent"] == pd.Timedelta(0), "time_spent"] = pd.Timedelta(
             15, "m"
@@ -94,9 +95,9 @@ class Invoice:
 
         return df
 
-    def convert_data(self, o):
+    def convert_data(self, o: Any) -> Any:
         if isinstance(o, date):
-            return o.strftime(format="%d/%m/%Y")
+            return o.strftime("%d/%m/%Y")
         elif isinstance(o, (Client, Company)):
             return o.__dict__
         elif isinstance(o, (APISession, APIServer, Session)):
@@ -104,7 +105,7 @@ class Invoice:
         else:
             json.JSONEncoder.default(self, o)
 
-    def to_json(self):
+    def to_json(self) -> str:
         return json.dumps(
             self.__dict__, default=self.convert_data, sort_keys=True, indent=4
         )

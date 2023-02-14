@@ -1,6 +1,7 @@
-from clockify.api import APIResponse
-from clockify.api import APIServer
 from datetime import date
+from typing import Any
+
+from api import APIServer
 
 
 class APISession:
@@ -11,7 +12,7 @@ class APISession:
 
     clockify_datetime_format = "%Y-%m-%dT%H:%M:%SZ"
 
-    def __init__(self, APIServer: APIServer):
+    def __init__(self, APIServer: APIServer) -> None:
         self.api = APIServer
         self.user = self.get_user()
         self.user_id = self.user["id"]
@@ -19,32 +20,31 @@ class APISession:
         self.workspace = self.user["defaultWorkspace"]
         self.timezone = self.user["settings"]["timeZone"]
 
-    def set_workspace(self, workspace_id: str) -> APIResponse:
+    def set_workspace(self, workspace_id: str) -> None:
         self.workspace = workspace_id
 
-    def get_user(self) -> APIResponse:
+    def get_user(self) -> dict[str, Any]:
         return self.api.get("/user")
 
-    def get_project(self, project_id) -> APIResponse:
+    def get_project(self, project_id: int) -> dict[str, Any]:
         return self.api.get(f"/workspaces/{self.workspace}/projects/{project_id}")
 
-    def get_projects(self) -> APIResponse:
+    def get_projects(self) -> dict[str, Any]:
         return self.api.get(f"/workspaces/{self.workspace}/projects")
 
-    def get_workspaces(self) -> APIResponse:
+    def get_workspaces(self) -> dict[str, Any]:
         return self.api.get("/workspaces")
 
-    def get_default_workspace(self) -> APIResponse:
+    def get_default_workspace(self) -> dict[str, Any]:
         return self.user["defaultWorkspace"]
 
     def get_time_entries(
         self,
-        workspace_id: str = None,
-        user_id: str = None,
-        start_date: date = None,
-        end_date: date = None,
-    ) -> APIResponse:
-
+        workspace_id: str | None = None,
+        user_id: str | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> dict[str, Any]:
         if workspace_id is None:
             workspace_id = self.workspace
         if user_id is None:

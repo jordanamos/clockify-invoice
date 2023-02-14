@@ -1,6 +1,3 @@
-from unittest.mock import Mock
-from requests.models import Response
-
 GET_USER = {
     "id": "1234ABCD",
     "email": "test.email@gmail.com",
