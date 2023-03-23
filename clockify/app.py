@@ -41,7 +41,7 @@ def download() -> wrappers.Response | werkzeug.wrappers.Response:
     if "invoice" in session:
         # invoice = json.loads(session.__dict__)
         invoice = json.loads(session.get("invoice"))
-        # invoice_name = "invoice.pdf"
+        invoice_name = "invoice.pdf"
         form_data = {
             "display-form": "none",
         }
@@ -55,7 +55,7 @@ def download() -> wrappers.Response | werkzeug.wrappers.Response:
             return send_file(
                 io.BytesIO(rendered_pdf),
                 mimetype="application/pdf",
-                # download_name=invoice_name,
+                download_name=invoice_name,
                 as_attachment=True,
             )
     return redirect("/")
