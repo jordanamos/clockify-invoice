@@ -26,6 +26,7 @@ from clockify import api
 from clockify import client
 from clockify.api import APIKeyMissingError
 from clockify.invoice import Invoice
+from clockify.store import Store
 
 app = Flask(__name__)
 
@@ -116,8 +117,7 @@ def process_invoice() -> str:
     return rendered_invoice
 
 
-def run_interactive(clockify_session: Session) -> int:
-    app.secret_key = clockify_session.headers["X-Api-key"]
+def run_interactive() -> int:
     app.run(host="0.0.0.0", port=5000, debug=True)
     return 0
 
@@ -133,6 +133,9 @@ def clockify_session() -> Generator[Session, None, None]:
             be found in your user settings.
             """
         )
+
+    app.secret_key = api_key
+
     with contextlib.closing(Session()) as sess:
         sess.headers = {
             "X-Api-key": api_key,
@@ -141,20 +144,50 @@ def clockify_session() -> Generator[Session, None, None]:
         yield sess
 
 
+def generate_invoice(store: Store) -> int:
+    return 0
+
+
+def synch(store: Store, sess: Session, time_entries_only: bool) -> int:
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Clockify Invoice Command Line Tool")
-    parser.add_argument(
+    command_parser = parser.add_subparsers(dest="command")
+
+    synch_parser = command_parser.add_parser(
+        "synch",
+        help="Synchs the local db with clockify.",
+    )
+    synch_parser.add_argument(
+        "--entries-only",
+        action="store_true",
+        help="Set this flag to only synch the time entries",
+    )
+
+    invoice_parser = command_parser.add_parser(
+        "invoice", help="Generate a clockify invoice"
+    )
+
+    invoice_parser.add_argument(
         "-i",
         action="store_true",
         dest="interactive_mode",
         help="Runs a local server to create invoices interactively in the browser",
     )
+
     args = parser.parse_args(argv)
 
-    with clockify_session() as sess:
-        if args.interactive_mode:
-            return run_interactive(sess)
+    store = Store()
 
+    if args.command == "invoice":
+        if args.interactive_mode:
+            return run_interactive()
+        return generate_invoice(store)
+    elif args.command == "synch":
+        with clockify_session() as sess:
+            return synch(store, sess, args.entries_only)
     return 0
 
 
