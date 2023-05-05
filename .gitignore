@@ -3,3 +3,5 @@ __pycache__/
 .pdf
 .pytest_cache/
 .python-version
+*.egg-info
+.mypy_cache
