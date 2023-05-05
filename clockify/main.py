@@ -22,9 +22,10 @@ from flask import wrappers
 from requests import Session
 from weasyprint import HTML
 
-from clockify import api
 from clockify import client
 from clockify.api import APIKeyMissingError
+from clockify.api import APIServer
+from clockify.client import APISession
 from clockify.invoice import Invoice
 from clockify.store import Store
 
@@ -101,7 +102,7 @@ def process_invoice() -> str:
 
     with clockify_session() as sess:
         invoice = Invoice(
-            client.APISession(api.APIServer(sess)),
+            client.APISession(APIServer(sess)),
             invoice_number,
             invoice_company,
             invoice_client,
@@ -148,7 +149,46 @@ def generate_invoice(store: Store) -> int:
     return 0
 
 
-def synch(store: Store, sess: Session, time_entries_only: bool) -> int:
+def synch(store: Store, time_entries_only: bool) -> int:
+    with clockify_session() as sess, store.connect() as db:
+        session = APISession(APIServer(sess))
+
+        user = session.get_user()
+        workspace_id = user["activeWorkspace"] or user["defaultWorkspace"]
+        user_id = user["id"]
+        user_table_data = (
+            user_id,
+            user["name"],
+            user["email"],
+            user["defaultWorkspace"],
+            user["activeWorkspace"],
+        )
+        db.execute("REPLACE INTO user VALUES(?, ?, ?, ?, ?)", user_table_data)
+
+        workspaces = session.get_workspaces()
+        workspaces_data = [(ws["id"], ws["name"]) for ws in workspaces]
+        db.executemany("REPLACE INTO workspace VALUES(?,?)", workspaces_data)
+
+        time_entries = session.get_time_entries(workspace_id, user_id)
+        time_entries_data = [
+            (
+                te["id"],
+                te["timeInterval"]["start"],
+                te["timeInterval"]["end"],
+                te["timeInterval"]["duration"],
+                te["description"],
+                user_id,
+                None,
+                workspace_id,
+            )
+            for te in time_entries
+        ]
+        db.executemany(
+            "REPLACE INTO time_entry VALUES(?,?,?,?,?,?,?,?)", time_entries_data
+        )
+
+        db.commit()
+
     return 0
 
 
@@ -158,7 +198,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     synch_parser = command_parser.add_parser(
         "synch",
-        help="Synchs the local db with clockify.",
+        help="Synch the local db with clockify.",
     )
     synch_parser.add_argument(
         "--entries-only",
@@ -174,7 +214,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "-i",
         action="store_true",
         dest="interactive_mode",
-        help="Runs a local server to create invoices interactively in the browser",
+        help="Run a local server to create invoices interactively in the browser",
     )
 
     args = parser.parse_args(argv)
@@ -186,8 +226,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             return run_interactive()
         return generate_invoice(store)
     elif args.command == "synch":
-        with clockify_session() as sess:
-            return synch(store, sess, args.entries_only)
+        return synch(store, args.entries_only)
     return 0
 
 

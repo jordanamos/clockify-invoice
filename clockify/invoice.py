@@ -41,14 +41,14 @@ class Invoice:
     def line_items(self) -> pd.DataFrame:
         # TODO add params for end date <= self.end_date for ?improved?
         # performance with historic requests
-        time_entries = self.session.get_time_entries()
+        time_entries = self.session.get_time_entries("", "")  # TODO
         return self.get_billable_items(time_entries)
 
     @property
     def total(self) -> float:
         return self.line_items["amount"].sum()
 
-    def get_billable_items(self, time_entries: dict[str, Any]) -> pd.DataFrame:
+    def get_billable_items(self, time_entries: list[dict[str, Any]]) -> pd.DataFrame:
         # pd.options.display.float_format = "{:,.2f}".format
 
         df = pd.json_normalize(time_entries)

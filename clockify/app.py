@@ -121,7 +121,7 @@ def clockify_session() -> Generator[Session, None, None]:
     if api_key is None:
         raise api.APIKeyMissingError(
             """'CLOCKIFY_API_KEY' environment variable not set.
-            Connection to Clockify's API requires an  API Key which can
+            Connection to Clockify's API requires an API Key which can
             be found in your user settings."""
         )
     with contextlib.closing(Session()) as sess:

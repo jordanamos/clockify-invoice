@@ -19,7 +19,7 @@ class Store:
             # Create tables
             db.execute(
                 """
-                CREATE TABLE IF NOT EXISTS workspace (
+                CREATE TABLE workspace (
                     id TEXT PRIMARY KEY,
                     name TEXT
                 )
@@ -28,54 +28,56 @@ class Store:
 
             db.execute(
                 """
-                CREATE TABLE IF NOT EXISTS user (
+                CREATE TABLE user (
                     id TEXT PRIMARY KEY,
                     name TEXT,
                     email TEXT,
-                    workspace_id TEXT,
-                    FOREIGN KEY (workspace_id) REFERENCES workspaces(id)
+                    default_workspace_id TEXT,
+                    active_workspace_id TEXT,
+                    FOREIGN KEY (default_workspace_id) REFERENCES workspace(id)
+                    FOREIGN KEY (active_workspace_id) REFERENCES workspace(id)
                 )
             """
             )
 
             db.execute(
                 """
-                CREATE TABLE IF NOT EXISTS client (
+                CREATE TABLE client (
                     id TEXT PRIMARY KEY,
                     name TEXT,
                     workspace_id TEXT,
-                    FOREIGN KEY (workspace_id) REFERENCES workspaces(id)
+                    FOREIGN KEY (workspace_id) REFERENCES workspace(id)
                 )
             """
             )
 
             db.execute(
                 """
-                CREATE TABLE IF NOT EXISTS project (
+                CREATE TABLE project (
                     id TEXT PRIMARY KEY,
                     name TEXT,
                     client_id TEXT,
                     workspace_id TEXT,
-                    FOREIGN KEY (client_id) REFERENCES clients(id),
-                    FOREIGN KEY (workspace_id) REFERENCES workspaces(id)
+                    FOREIGN KEY (client_id) REFERENCES client(id),
+                    FOREIGN KEY (workspace_id) REFERENCES workspace(id)
                 )
             """
             )
 
             db.execute(
                 """
-                CREATE TABLE IF NOT EXISTS time_entry (
+                CREATE TABLE time_entry (
                     id TEXT PRIMARY KEY,
                     start_time TEXT,
                     end_time TEXT,
-                    duration INTEGER,
+                    duration TEXT,
                     description TEXT,
                     user_id TEXT,
                     project_id TEXT,
                     workspace_id TEXT,
-                    FOREIGN KEY (user_id) REFERENCES users(id),
-                    FOREIGN KEY (project_id) REFERENCES projects(id),
-                    FOREIGN KEY (workspace_id) REFERENCES workspaces(id)
+                    FOREIGN KEY (user_id) REFERENCES user(id),
+                    FOREIGN KEY (project_id) REFERENCES project(id),
+                    FOREIGN KEY (workspace_id) REFERENCES workspace(id)
                 )
             """
             )

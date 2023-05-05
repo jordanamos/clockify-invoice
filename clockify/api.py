@@ -14,7 +14,7 @@ class APIServer:
     def __init__(self, session: requests.Session) -> None:
         self.session = session
 
-    def get(self, path: str, params: dict[str, str] = {}) -> dict[str, Any]:
+    def get(self, path: str, params: dict[str, str] = {}) -> Any:
         url = self.api_base_endpoint + path
 
         raw_response = self.session.get(
