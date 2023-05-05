@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import calendar as cal
 import contextlib
 import io
@@ -9,8 +11,6 @@ from datetime import datetime
 from datetime import timedelta
 from typing import Any
 
-import api
-import client
 import werkzeug.wrappers
 from flask import Flask
 from flask import redirect
@@ -19,9 +19,12 @@ from flask import request
 from flask import send_file
 from flask import session
 from flask import wrappers
-from invoice import Invoice
 from requests import Session
 from weasyprint import HTML
+
+from clockify import api
+from clockify.client import APISession
+from clockify.invoice import Invoice
 
 app = Flask(__name__)
 
@@ -94,14 +97,15 @@ def process_invoice() -> str:
         day=cal.monthrange(period_date.year, period_date.month)[1]
     )
 
-    invoice = Invoice(
-        clockify_session,
-        invoice_number,
-        invoice_company,
-        invoice_client,
-        period_start,
-        period_end,
-    )
+    with clockify_session() as sess:
+        invoice = Invoice(
+            APISession(api.APIServer(sess)),
+            invoice_number,
+            invoice_company,
+            invoice_client,
+            period_start,
+            period_end,
+        )
 
     session["invoice"] = invoice.to_json()
     rendered_invoice = render_template(
@@ -112,7 +116,7 @@ def process_invoice() -> str:
 
 
 @contextlib.contextmanager
-def sess() -> Generator[Session, None, None]:
+def clockify_session() -> Generator[Session, None, None]:
     api_key = os.getenv("CLOCKIFY_API_KEY")
     if api_key is None:
         raise api.APIKeyMissingError(
@@ -137,6 +141,5 @@ if __name__ == "__main__":
             be found in your user settings."""
         )
     app.secret_key = API_KEY
-    clockify_session = client.APISession(api.APIServer(API_KEY))
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)

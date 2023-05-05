@@ -4,19 +4,15 @@ from json.decoder import JSONDecodeError
 from typing import Any
 
 import requests
-from exceptions import ClockifyAPIException
+
+from clockify.exceptions import ClockifyAPIException
 
 
 class APIServer:
     api_base_endpoint = "https://api.clockify.me/api/v1"
 
-    def __init__(self, api_key: str) -> None:
-        self.api_key = api_key
-        self.session = requests.Session()
-        self.session.headers = {
-            "X-Api-key": self.api_key,
-            "content-type": "application/json",
-        }
+    def __init__(self, session: requests.Session) -> None:
+        self.session = session
 
     def get(self, path: str, params: dict[str, str] = {}) -> dict[str, Any]:
         url = self.api_base_endpoint + path

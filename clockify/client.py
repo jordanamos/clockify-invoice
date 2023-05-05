@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Any
 
-from api import APIServer
+from clockify.api import APIServer
 
 
 class APISession:

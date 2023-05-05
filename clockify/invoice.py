@@ -3,9 +3,10 @@ from datetime import date
 from typing import Any
 
 import pandas as pd
-from api import APIServer
-from client import APISession
 from requests import Session
+
+from clockify.api import APIServer
+from clockify.client import APISession
 
 
 class Invoice:
@@ -103,7 +104,7 @@ class Invoice:
         elif isinstance(o, (APISession, APIServer, Session)):
             return str(o)
         else:
-            json.JSONEncoder.default(self, o)
+            json.JSONEncoder.default(json.JSONEncoder(), o)
 
     def to_json(self) -> str:
         return json.dumps(
