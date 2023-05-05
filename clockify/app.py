@@ -1,7 +1,9 @@
 import calendar as cal
+import contextlib
 import io
 import json
 import os
+from collections.abc import Generator
 from datetime import date
 from datetime import datetime
 from datetime import timedelta
@@ -18,6 +20,7 @@ from flask import send_file
 from flask import session
 from flask import wrappers
 from invoice import Invoice
+from requests import Session
 from weasyprint import HTML
 
 app = Flask(__name__)
@@ -40,7 +43,7 @@ def format_date(
 def download() -> wrappers.Response | werkzeug.wrappers.Response:
     if "invoice" in session:
         # invoice = json.loads(session.__dict__)
-        invoice = json.loads(session.get("invoice"))
+        invoice = json.loads(session.get("invoice", ""))
         invoice_name = "invoice.pdf"
         form_data = {
             "display-form": "none",
@@ -55,7 +58,7 @@ def download() -> wrappers.Response | werkzeug.wrappers.Response:
             return send_file(
                 io.BytesIO(rendered_pdf),
                 mimetype="application/pdf",
-                download_name=invoice_name,
+                download_name=invoice_name,  # type: ignore
                 as_attachment=True,
             )
     return redirect("/")
@@ -106,6 +109,23 @@ def process_invoice() -> str:
     )
 
     return rendered_invoice
+
+
+@contextlib.contextmanager
+def sess() -> Generator[Session, None, None]:
+    api_key = os.getenv("CLOCKIFY_API_KEY")
+    if api_key is None:
+        raise api.APIKeyMissingError(
+            """'CLOCKIFY_API_KEY' environment variable not set.
+            Connection to Clockify's API requires an  API Key which can
+            be found in your user settings."""
+        )
+    with contextlib.closing(Session()) as sess:
+        sess.headers = {
+            "X-Api-key": api_key,
+            "content-type": "application/json",
+        }
+        yield sess
 
 
 if __name__ == "__main__":
