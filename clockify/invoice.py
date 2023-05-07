@@ -7,6 +7,7 @@ from requests import Session
 
 from clockify.api import APIServer
 from clockify.client import APISession
+from clockify.store import Store
 
 
 class Invoice:
@@ -20,7 +21,7 @@ class Invoice:
 
     def __init__(
         self,
-        APISession: APISession,
+        store: Store,
         invoice_number: str,
         company_name: str,
         client_name: str,
@@ -29,7 +30,7 @@ class Invoice:
     ):
         self.invoice_date = date.today()
         self.invoice_number = invoice_number
-        self.session = APISession
+        self.store = store
         self.company = Company(company_name)
         self.client = Client(client_name)
         self.start_date = start_date

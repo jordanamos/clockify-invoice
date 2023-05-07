@@ -146,30 +146,45 @@ def clockify_session() -> Generator[Session, None, None]:
 
 
 def generate_invoice(store: Store) -> int:
+    workspace = store.get_default_workspace_id()
+    user = store.get_user_id()
+    if not (workspace and user):
+        ...
+
     return 0
 
 
 def synch(store: Store, time_entries_only: bool) -> int:
-    with clockify_session() as sess, store.connect() as db:
-        session = APISession(APIServer(sess))
+    with (
+        clockify_session() as session,
+        store.connect() as db,
+    ):
+        api_session = APISession(APIServer(session))
+        # TODO make a backup of the db file if it exists
+        # before doing this work incase it fails
+        if not time_entries_only:
+            store.clear_db()
+            user = api_session.get_user()
+            user_table_data = (
+                user["id"],
+                user["name"],
+                user["email"],
+                user["defaultWorkspace"],
+                user["activeWorkspace"],
+            )
+            db.execute("INSERT INTO user VALUES(?,?,?,?,?)", user_table_data)
 
-        user = session.get_user()
-        workspace_id = user["activeWorkspace"] or user["defaultWorkspace"]
-        user_id = user["id"]
-        user_table_data = (
-            user_id,
-            user["name"],
-            user["email"],
-            user["defaultWorkspace"],
-            user["activeWorkspace"],
-        )
-        db.execute("REPLACE INTO user VALUES(?, ?, ?, ?, ?)", user_table_data)
+            workspaces = api_session.get_workspaces()
+            workspaces_data = [(ws["id"], ws["name"]) for ws in workspaces]
+            db.executemany("INSERT INTO workspace VALUES(?,?)", workspaces_data)
+            db.commit()
+        else:
+            store.clear_db("time_entry")
 
-        workspaces = session.get_workspaces()
-        workspaces_data = [(ws["id"], ws["name"]) for ws in workspaces]
-        db.executemany("REPLACE INTO workspace VALUES(?,?)", workspaces_data)
+        workspace = store.get_default_workspace_id()
+        user = store.get_user_id()
 
-        time_entries = session.get_time_entries(workspace_id, user_id)
+        time_entries = api_session.get_time_entries(workspace, user)
         time_entries_data = [
             (
                 te["id"],
@@ -177,17 +192,15 @@ def synch(store: Store, time_entries_only: bool) -> int:
                 te["timeInterval"]["end"],
                 te["timeInterval"]["duration"],
                 te["description"],
-                user_id,
-                None,
-                workspace_id,
+                user,
+                None,  # Project
+                workspace,
             )
             for te in time_entries
         ]
         db.executemany(
-            "REPLACE INTO time_entry VALUES(?,?,?,?,?,?,?,?)", time_entries_data
+            "INSERT INTO time_entry VALUES(?,?,?,?,?,?,?,?)", time_entries_data
         )
-
-        db.commit()
 
     return 0
 
