@@ -32,11 +32,7 @@ class TimeEntry(NamedTuple):
 class Invoice:
     """
     A Class representation of an Invoice with clockify line items
-
     """
-
-    # TODO handle timezones
-    date_display_format = "%d/%m/%Y"
 
     def __init__(
         self,
