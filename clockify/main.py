@@ -251,8 +251,8 @@ def synch(store: Store, time_entries_only: bool) -> int:
                 datetime.strptime(te["timeInterval"]["start"], clockify_date_format),
                 datetime.strptime(te["timeInterval"]["end"], clockify_date_format),
                 # te["timeInterval"]["duration"],
-                datetime.strptime(te["timeInterval"]["end"], clockify_date_format)
-                - datetime.strptime(te["timeInterval"]["start"], clockify_date_format),
+                (datetime.strptime(te["timeInterval"]["end"], clockify_date_format)
+                - datetime.strptime(te["timeInterval"]["start"], clockify_date_format)).total_seconds(),
                 te["description"],
                 user,
                 None,  # Project

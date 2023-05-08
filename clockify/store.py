@@ -72,7 +72,7 @@ class Store:
                     id TEXT PRIMARY KEY,
                     start_time TEXT,
                     end_time TEXT,
-                    duration TEXT,
+                    duration_seconds INT,
                     description TEXT,
                     user TEXT,
                     project TEXT,
