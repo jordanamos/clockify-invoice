@@ -1,9 +1,9 @@
 import json
 from datetime import date
-from typing import Any
-
-from typing import NamedTuple
 from datetime import datetime
+from typing import Any
+from typing import NamedTuple
+
 from clockify.store import Store
 
 TIME_ENTRIES_QUERY = """\
@@ -19,16 +19,18 @@ WHERE user = ?
 GROUP BY description
 """
 
+
 class TimeEntry(NamedTuple):
     date: datetime
     description: str
     duration_hours: float
     rate: float
-    
+
     @property
     def billable_amount(self) -> float:
         return self.duration_hours * self.rate
-    
+
+
 class Invoice:
     """
     A Class representation of an Invoice with clockify line items
@@ -49,44 +51,63 @@ class Invoice:
         self.invoice_number = invoice_number
         self.company = Company(company_name)
         self.client = Client(client_name)
-        self.period_start = period_start
-        self.period_end = period_end
+        self._period_start = period_start
+        self._period_end = period_end
+        self._time_entries = self._get_time_entries()
 
+    @property
+    def period_start(self) -> date:
+        return self._period_start
+
+    @period_start.setter
+    def period_start(self, value: date) -> None:
+        self._period_start = value
+        self._time_entries = self._get_time_entries()
+
+    @property
+    def period_end(self) -> date:
+        return self._period_end
+
+    @period_end.setter
+    def period_end(self, value: date) -> None:
+        self._period_end = value
+        self._time_entries = self._get_time_entries()
+
+    @property
     def time_entries(self) -> list[TimeEntry]:
+        return self._time_entries
+
+    def _get_time_entries(self) -> list[TimeEntry]:
         with self.store.connect() as db:
             rows = db.execute(
-                TIME_ENTRIES_QUERY, 
-                (self.store.get_user_id(), self.store.get_default_workspace_id(), self.period_start, self.period_end),
+                TIME_ENTRIES_QUERY,
+                (
+                    self.store.get_user_id(),
+                    self.store.get_workspace_id(),
+                    self.period_start,
+                    self.period_end,
+                ),
             ).fetchall()
 
-        time_entries: list[TimeEntry] = []
+        entries: list[TimeEntry] = []
 
         for row in rows:
             date = row[0]
             description = row[1]
             duration_seconds = int(row[2])
-            duration_hours = (round((duration_seconds / 3600) * 4) / 4) or 0.25 
+            duration_hours = (round((duration_seconds / 3600) * 4) / 4) or 0.25
             time_entry = TimeEntry(date, description, duration_hours, 70.0)
-            time_entries.append(time_entry)
-            
-        return time_entries
+            entries.append(time_entry)
+        return entries
 
-    def convert_data(self, o: Any) -> Any:
-        if isinstance(o, date):
-            return o.strftime("%d/%m/%Y")
-        elif isinstance(o, (Client, Company)):
-            return o.__dict__
-        elif isinstance(o, Store):
-            return str(o)
-        else:
-            json.JSONEncoder.default(json.JSONEncoder(), o)
+    @property
+    def total(self) -> float:
+        return sum(entry.billable_amount for entry in self.time_entries)
 
     def to_json(self) -> str:
-        return json.dumps(
-            self.__dict__, default=self.convert_data, sort_keys=True, indent=4
-        )
+        return json.dumps(self.to_dict(), sort_keys=True, indent=4)
 
-    def __dict__(self):
+    def to_dict(self) -> dict[str, Any]:
         return {
             "invoice_number": self.invoice_number,
             "company": {
@@ -95,9 +116,10 @@ class Invoice:
             "client": {
                 "name": self.client.__dict__,
             },
-            "period_start": self.period_start,
-            "period_end": self.period_end,
-            "time_entries": [entry._asdict() for entry in self.time_entries()],
+            "period_start": str(self.period_start),
+            "period_end": str(self.period_end),
+            "time_entries": [entry._asdict() for entry in self.time_entries],
+            "total": self.total,
         }
 
 

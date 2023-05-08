@@ -2,18 +2,20 @@ import argparse
 import calendar as cal
 import contextlib
 import io
-import json
+import itertools
 import os
+import sqlite3
+import sys
+import tempfile
+import threading
+import time
 from collections.abc import Generator
 from collections.abc import Sequence
 from datetime import date
 from datetime import datetime
 from datetime import timedelta
 from typing import Any
-import itertools
-import threading
-import sys
-import time
+
 import werkzeug.wrappers
 from flask import Flask
 from flask import redirect
@@ -33,15 +35,6 @@ from clockify.store import Store
 
 app = Flask(__name__)
 
-API_KEY = os.getenv("CLOCKIFY_API_KEY")
-if API_KEY is None:
-    raise APIKeyMissingError(
-        """
-        'CLOCKIFY_API_KEY' environment variable not set.
-        Connection to Clockify's API requires an  API Key which can
-        be found in your user settings.
-        """
-    )
 
 @app.template_filter("format_date")
 def format_date(
@@ -58,31 +51,32 @@ def format_date(
 
 @app.route("/download", methods=["GET"])
 def download() -> wrappers.Response | werkzeug.wrappers.Response:
-    if "invoice" in session:
-        invoice = json.loads(session.get("invoice", ""))
-        invoice_name = "invoice.pdf"
-        form_data = {
-            "display-form": "none",
-        }
-        rendered_invoice = render_template(
-            "invoice.html", invoice=invoice, form_data=form_data
-        )
-        html = HTML(string=rendered_invoice)
-        rendered_pdf = html.write_pdf()
+    if "invoice" not in session:
+        return redirect("/")
 
-        if rendered_pdf:
-            return send_file(
-                io.BytesIO(rendered_pdf),
-                mimetype="application/pdf",
-                download_name=invoice_name,  # type: ignore
-                as_attachment=True,
-            )
+    invoice: Invoice = session["invoice"]
+    invoice_name = "invoice.pdf"
+    form_data = {
+        "display-form": "none",
+    }
+    rendered_invoice = render_template(
+        "invoice.html", invoice=invoice, form_data=form_data
+    )
+    html = HTML(string=rendered_invoice)
+    rendered_pdf = html.write_pdf()
+
+    if rendered_pdf:
+        return send_file(
+            io.BytesIO(rendered_pdf),
+            mimetype="application/pdf",
+            download_name=invoice_name,  # type: ignore
+            as_attachment=True,
+        )
     return redirect("/")
 
 
 @app.route("/", methods=["GET", "POST"])
 def process_invoice() -> str:
-    store = app.config["store"]
     invoice_company = "Jordan Amos"
     invoice_client = "6 Cloud Systems"
 
@@ -111,25 +105,31 @@ def process_invoice() -> str:
         day=cal.monthrange(period_date.year, period_date.month)[1]
     )
 
-    invoice = Invoice(
-        store,
-        invoice_number,
-        invoice_company,
-        invoice_client,
-        period_start,
-        period_end,
-    )
+    if "invoice" in session:
+        invoice: Invoice = session["invoice"]
+        invoice.invoice_number = invoice_number
+        invoice.period_start = period_start
+        invoice.period_end = period_end
+    else:
+        store = app.config["store"]
+        invoice = Invoice(
+            store,
+            invoice_number,
+            invoice_company,
+            invoice_client,
+            period_start,
+            period_end,
+        )
 
-    session["invoice"] = invoice.to_json()
+    session["invoice"] = invoice
     rendered_invoice = render_template(
-        "invoice.html", invoice=invoice.__dict__, form_data=form_data
+        "invoice.html", invoice=invoice.to_dict(), form_data=form_data
     )
 
     return rendered_invoice
 
 
 def run_interactive() -> int:
-    app.secret_key = API_KEY
     app.run(host="0.0.0.0", port=5000, debug=True)
     return 0
 
@@ -137,6 +137,7 @@ def run_interactive() -> int:
 @contextlib.contextmanager
 def clockify_session() -> Generator[Session, None, None]:
     api_key = os.getenv("CLOCKIFY_API_KEY")
+
     if api_key is None:
         raise APIKeyMissingError(
             """
@@ -145,7 +146,8 @@ def clockify_session() -> Generator[Session, None, None]:
             be found in your user settings.
             """
         )
-    
+    app.secret_key = api_key
+
     with contextlib.closing(Session()) as sess:
         sess.headers = {
             "X-Api-key": api_key,
@@ -155,12 +157,12 @@ def clockify_session() -> Generator[Session, None, None]:
 
 
 def generate_invoice(store: Store) -> int:
-    workspace = store.get_workspace_id()
-    user = store.get_user_id()
-    if not (workspace and user):
+    workspace_id = store.get_workspace_id()
+    user_id = store.get_user_id()
+    if not (workspace_id and user_id):
         print(
-            f"Unable to generate invoice: User ({user}) or "
-            f"Workspace ({workspace}) has 'None' value."
+            f"ERROR generating invoice: Invalid User ({user_id}) or "
+            f"Workspace ({workspace_id})"
         )
         return 1
 
@@ -174,7 +176,6 @@ def generate_invoice(store: Store) -> int:
         day=cal.monthrange(period_date.year, period_date.month)[1]
     )
 
-
     invoice = Invoice(
         store,
         invoice_number,
@@ -184,8 +185,10 @@ def generate_invoice(store: Store) -> int:
         period_end,
     )
 
-    print(dict(invoice.to_json()))
+    # print(invoice.to_json())
+    # print(invoice.to_dict())
     return 0
+
 
 @contextlib.contextmanager
 def spinner(message: str) -> Generator[None, None, None]:
@@ -210,87 +213,103 @@ def spinner(message: str) -> Generator[None, None, None]:
         sys.stdout.write(clear)
         sys.stdout.flush()
 
-def synch(store: Store, time_entries_only: bool) -> int:
-    with (
-        clockify_session() as session,
-        store.connect() as db,
-    ):
-        api_session = APISession(APIServer(session))
-        # TODO make a backup of the db file if it exists
-        # before doing this work incase it fails
-        if not time_entries_only:
-            store.clear_db()
-            user = api_session.get_user()
-            user_table_data = (
-                user["id"],
-                user["name"],
-                user["email"],
-                user["defaultWorkspace"],
-                user["activeWorkspace"],
-            )
-            db.execute("INSERT INTO user VALUES(?,?,?,?,?)", user_table_data)
 
-            workspaces = api_session.get_workspaces()
-            workspaces_data = [(ws["id"], ws["name"]) for ws in workspaces]
-            db.executemany("INSERT INTO workspace VALUES(?,?)", workspaces_data)
-            db.commit()
-        else:
-            store.clear_db("time_entry")
+def synch_user(api_session: APISession, db: sqlite3.Connection) -> tuple[str, str]:
+    """
+    Fetches the User from the clockify API and inserts the User into the db.
+    Returns the user id and workspace id
+    """
+    user = api_session.get_user()
+    user_table_data = (
+        user["id"],
+        user["name"],
+        user["email"],
+        user["defaultWorkspace"],
+        user["activeWorkspace"],
+    )
+    db.execute("INSERT INTO user VALUES(?,?,?,?,?)", user_table_data)
+    return user["id"], user["activeWorkspace"] or user["defaultWorkspace"]
 
-        workspace = store.get_default_workspace_id()
-        user = store.get_user_id()  # type: ignore
-        if workspace is None or user is None:
-            print(
-                f"Unable to fetch time entries: User ({user}) or "
-                f"Workspace ({workspace}) has 'None' value."
-            )
-            return 1
 
-        clockify_date_format = "%Y-%m-%dT%H:%M:%SZ"  # ISO 8601
+def synch_workspaces(api_session: APISession, db: sqlite3.Connection) -> None:
+    workspaces = api_session.get_workspaces()
+    workspaces_data = [(ws["id"], ws["name"]) for ws in workspaces]
+    db.executemany("INSERT INTO workspace VALUES(?,?)", workspaces_data)
 
-        def get_clockify_diff_seconds(date_start_string: str, date_end_string:str):
-            date_start = datetime.strptime(date_start_string, clockify_date_format)
-            date_end = datetime.strptime(date_end_string, clockify_date_format)
-            return (date_end - date_start).total_seconds()
-        
-        time_entries = api_session.get_time_entries(workspace, user)  # type: ignore
-        time_entries_data = [
-            (
-                te["id"],
-                datetime.strptime(te["timeInterval"]["start"], clockify_date_format),
-                datetime.strptime(te["timeInterval"]["end"], clockify_date_format),
-                # te["timeInterval"]["duration"],
-                get_clockify_diff_seconds(te["timeInterval"]["start"], te["timeInterval"]["end"]),
-                te["description"],
-                user,
-                None,  # Project
-                workspace,
-            )
-            for te in time_entries
-        ]
-        db.executemany(
-            "INSERT INTO time_entry VALUES(?,?,?,?,?,?,?,?)", time_entries_data
+
+def synch_time_entries(
+    api_session: APISession,
+    db: sqlite3.Connection,
+    user_id: str,
+    workspace_id: str,
+) -> None:
+    clockify_date_format = "%Y-%m-%dT%H:%M:%SZ"
+
+    def get_clockify_diff_seconds(
+        date_start_string: str, date_end_string: str
+    ) -> float:
+        date_start = datetime.strptime(date_start_string, clockify_date_format)
+        date_end = datetime.strptime(date_end_string, clockify_date_format)
+        return (date_end - date_start).total_seconds()
+
+    time_entries = api_session.get_time_entries(workspace_id, user_id)
+    time_entries_data = [
+        (
+            te["id"],
+            datetime.strptime(te["timeInterval"]["start"], clockify_date_format),
+            datetime.strptime(te["timeInterval"]["end"], clockify_date_format),
+            # te["timeInterval"]["duration"],
+            get_clockify_diff_seconds(
+                te["timeInterval"]["start"], te["timeInterval"]["end"]
+            ),
+            te["description"],
+            user_id,
+            workspace_id,
         )
+        for te in time_entries
+    ]
+    db.executemany("INSERT INTO time_entry VALUES(?,?,?,?,?,?,?,?)", time_entries_data)
 
-    return 0
+
+def synch(store: Store) -> int:
+    fd, tmp_db = tempfile.mkstemp(dir=store.directory)
+    os.close(fd)
+    store.create_db(tmp_db)
+
+    try:
+        with (
+            clockify_session() as session,
+            store.connect(tmp_db) as db,
+            spinner("Synching..."),
+        ):
+            api_session = APISession(APIServer(session))
+            user_id, workspace_id = synch_user(api_session, db)
+            if workspace_id is None or user_id is None:
+                print(
+                    f"SYNCH FAILED: Invalid User ({user_id}) "
+                    f"or Workspace ({workspace_id})"
+                )
+                os.remove(tmp_db)
+                return 1
+            synch_workspaces(api_session, db)
+            synch_time_entries(api_session, db, user_id, workspace_id)
+    except BaseException:
+        os.remove(tmp_db)
+        raise
+    else:
+        os.replace(tmp_db, store.db_path)
+        return 0
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Clockify Invoice Command Line Tool")
     command_parser = parser.add_subparsers(dest="command")
 
-    synch_parser = command_parser.add_parser(
-        "synch",
-        help="Synch the local db with clockify.",
-    )
-    synch_parser.add_argument(
-        "--entries-only",
-        action="store_true",
-        help="Set this flag to only synch the time entries",
-    )
+    command_parser.add_parser("synch", help="Synch the local db with clockify.")
 
     invoice_parser = command_parser.add_parser(
-        "invoice", help="Generate a clockify invoice"
+        "invoice",
+        help="Generate a clockify invoice",
     )
 
     invoice_parser.add_argument(
@@ -310,7 +329,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             return run_interactive()
         return generate_invoice(store)
     elif args.command == "synch":
-        return synch(store, args.entries_only)
+        return synch(store)
     return 0
 
 

@@ -18,34 +18,25 @@ class Store:
         if not os.path.exists(self.db_path):
             self.create_db()
 
-    def create_db(self) -> None:
-        with self.connect() as db:
-            # Create tables
-            db.execute(
-                """
+    def create_db(self, db_path: str | None = None) -> None:
+        with self.connect(db_path) as db:
+            db.executescript(
+                """\
                 CREATE TABLE workspace (
                     id TEXT PRIMARY KEY,
                     name TEXT
-                )
-            """
-            )
+                );
 
-            db.execute(
-                """
                 CREATE TABLE user (
                     id TEXT PRIMARY KEY,
                     name TEXT,
                     email TEXT,
                     default_workspace TEXT,
                     active_workspace TEXT,
-                    FOREIGN KEY (default_workspace) REFERENCES workspace(id)
+                    FOREIGN KEY (default_workspace) REFERENCES workspace(id),
                     FOREIGN KEY (active_workspace) REFERENCES workspace(id)
-                )
-            """
-            )
+                );
 
-            db.execute(
-                """
                 CREATE TABLE time_entry (
                     id TEXT PRIMARY KEY,
                     start_time TEXT,
@@ -56,16 +47,17 @@ class Store:
                     workspace TEXT,
                     FOREIGN KEY (user) REFERENCES user(id),
                     FOREIGN KEY (workspace) REFERENCES workspace(id)
-                )
-            """
+                );"""
             )
 
-    def clear_db(self, table_name: str | None = None) -> None:
+    def clear_db(
+        self, db_path: str | None = None, table_name: str | None = None
+    ) -> None:
         """
         Delete all data in all tables.
         If table_name is given, only data in that table is deleted.
         """
-        with self.connect() as db:
+        with self.connect(db_path) as db:
             if table_name:
                 db.execute(f"DELETE FROM {table_name}")
             else:
@@ -103,7 +95,11 @@ class Store:
         )
 
     @contextlib.contextmanager
-    def connect(self) -> Generator[sqlite3.Connection, None, None]:
-        with contextlib.closing(sqlite3.connect(self.db_path)) as db:
+    def connect(
+        self, db_path: str | None = None
+    ) -> Generator[sqlite3.Connection, None, None]:
+        if db_path is None:
+            db_path = self.db_path
+        with contextlib.closing(sqlite3.connect(db_path)) as db:
             with db:
                 yield db
