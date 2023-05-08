@@ -25,7 +25,7 @@ from weasyprint import HTML
 from clockify.api import APIKeyMissingError
 from clockify.api import APIServer
 from clockify.client import APISession
-from clockify.invoice import Invoice
+from clockify.invoice import Invoice, TimeEntry
 from clockify.store import Store
 
 app = Flask(__name__)
@@ -165,33 +165,41 @@ def generate_invoice(store: Store) -> int:
     )
 
     TIME_ENTRIES_QUERY = """\
-        SELECT MAX(start_time) AS entry_date
-            , end_time
+        SELECT MAX(end_time) AS date
             , description
-            , SUM(duration_seconds) / 3600
+            , SUM(duration_seconds)
         FROM time_entry
         WHERE user = ?
             AND workspace = ?
-            AND duration_seconds > 0
             AND start_time >= ?
             AND end_time < ?
+            AND duration_seconds > 0
         GROUP BY description
         """
-
+    
     with store.connect() as db:
-        cur = db.execute(
-            TIME_ENTRIES_QUERY, (user, workspace, period_start, period_end)
-        )
-        rows = cur.fetchall()
+        rows = db.execute(
+            TIME_ENTRIES_QUERY, 
+            (user, workspace, period_start, period_end),
+        ).fetchall()
 
 
     # 2023-04-11 04:30:24 2023-04-11 05:20:54 0:50:30 PT50M30S
     # 2023-04-11 00:43:08 2023-04-11 01:46:33 1:03:25 PT1H3M25S
     # 2023-04-10 22:28:44 2023-04-11 00:05:08 1:36:24 PT1H36M24S
     # 2023-04-10 21:38:00 2023-04-10 22:20:00 0:42:00 PT42M
+    time_entries: list[TimeEntry] = []
 
     for row in rows:
-        print(float(row[3]) / 3600)
+        duration_hours = round((row[2] / 3600) * 4) / 4
+        if duration_hours == 0:
+            # nothing is for free
+            duration_hours = 0.25
+        time_entry = TimeEntry(row[0], row[1], duration_hours, 70.0)
+        time_entries.append(time_entry)
+
+    for e in time_entries:
+        print(e.billable_amount)
         # start = datetime.strptime(row[0], clockify_date_format)
         # end = datetime.strptime(row[1], clockify_date_format)
         # diff = end - start

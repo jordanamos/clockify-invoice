@@ -2,11 +2,21 @@ import json
 from datetime import date
 from typing import Any
 
-import pandas as pd
-
+from typing import NamedTuple
+from datetime import datetime
 from clockify.store import Store
 
 
+class TimeEntry(NamedTuple):
+    date: datetime
+    description: str
+    duration_hours: float
+    rate: float
+    
+    @property
+    def billable_amount(self) -> float:
+        return self.duration_hours * self.rate
+    
 class Invoice:
     """
     A Class representation of an Invoice with clockify line items
@@ -33,50 +43,6 @@ class Invoice:
         self.client = Client(client_name)
         self.start_date = start_date
         self.end_date = end_date
-
-    # @property
-    # def total(self) -> float:
-    #     return self.get_billable_items()["amount"].sum()
-
-    def get_billable_items(self, time_entries: list[tuple[str, ...]]) -> pd.DataFrame:
-        # pd.options.display.float_format = "{:,.2f}".format
-        clockify_date_format = "%Y-%m-%dT%H:%M:%SZ"  # ISO 8601
-
-        df = pd.DataFrame(
-            time_entries, columns=["item_date", "description", "duration"]
-        )
-        # filter rows to billable only
-
-        # convert item date to date
-        df["item_date"] = pd.to_datetime(
-            df["item_date"], format=clockify_date_format
-        ).dt.date
-
-        # convert time spent to time delta
-        df["duration"] = pd.to_timedelta(df["duration"])
-
-        # group items together, getting the max item date
-        # (the date the item was complete)
-        # and the sum of time taken (what we will use to bill)
-        df = df.groupby("description").agg({"item_date": "max", "duration": "sum"})
-        df = df.loc[
-            (df["item_date"] >= self.start_date) & (df["item_date"] <= self.end_date)
-        ]
-
-        # round the time spent to the nearest 15mins.
-        # if nearest is 0, set to 15mins. (nothing is for free!)
-        df["duration"] = df["duration"].dt.round("15min")
-        df.loc[df["duration"] == pd.Timedelta(0), "duration"] = pd.Timedelta(15, "m")
-
-        # generate additional invoicing related columns
-        df["duration_frac"] = df["duration"] / pd.Timedelta(1, "h")
-        df["rate"] = self.company.rate
-        df["amount"] = df["duration_frac"] * df["rate"]
-
-        df = df.drop(columns=["duration", "item_date"])
-        df.reset_index(inplace=True)
-
-        return df
 
     def convert_data(self, o: Any) -> Any:
         if isinstance(o, date):
