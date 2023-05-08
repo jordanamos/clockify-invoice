@@ -165,15 +165,17 @@ def generate_invoice(store: Store) -> int:
     )
 
     TIME_ENTRIES_QUERY = """\
-        SELECT start_time AS item_date
+        SELECT MAX(start_time) AS entry_date
             , end_time
             , description
             , duration
         FROM time_entry
         WHERE user = ?
             AND workspace = ?
+            AND duration > 0
             AND start_time >= ?
             AND end_time < ?
+        GROUP BY description
         """
 
     with store.connect() as db:
@@ -183,12 +185,17 @@ def generate_invoice(store: Store) -> int:
         rows = cur.fetchall()
     clockify_date_format = "%Y-%m-%dT%H:%M:%SZ"  # ISO 8601
 
+    # 2023-04-11 04:30:24 2023-04-11 05:20:54 0:50:30 PT50M30S
+    # 2023-04-11 00:43:08 2023-04-11 01:46:33 1:03:25 PT1H3M25S
+    # 2023-04-10 22:28:44 2023-04-11 00:05:08 1:36:24 PT1H36M24S
+    # 2023-04-10 21:38:00 2023-04-10 22:20:00 0:42:00 PT42M
+
     for row in rows:
-        # print(row)
-        start = datetime.strptime(row[0], clockify_date_format)
-        end = datetime.strptime(row[1], clockify_date_format)
-        diff = end - start
-        print(start, end, diff, row[3])
+        print(float(row[3]) / 3600)
+        # start = datetime.strptime(row[0], clockify_date_format)
+        # end = datetime.strptime(row[1], clockify_date_format)
+        # diff = end - start
+        # print(start, end, diff, row[3])
         # print(datetime.fromisoformat(row[2]))
         # duration = datetime.strptime(row[2], 'PT%HH%Mm%Ss')
         # total_seconds = duration.hour * 3600 + duration.minute * 60 + duration.second
@@ -204,6 +211,9 @@ def generate_invoice(store: Store) -> int:
     # )
     # print(invoice)
     return 0
+
+
+#
 
 
 def synch(store: Store, time_entries_only: bool) -> int:
@@ -244,6 +254,11 @@ def synch(store: Store, time_entries_only: bool) -> int:
 
         clockify_date_format = "%Y-%m-%dT%H:%M:%SZ"  # ISO 8601
 
+        def get_clockify_diff_seconds(date_start_string: str, date_end_string: str):
+            date_start = datetime.strptime(date_start_string, clockify_date_format)
+            date_end = datetime.strptime(date_end_string, clockify_date_format)
+            return (date_end - date_start).total_seconds()
+
         time_entries = api_session.get_time_entries(workspace, user)  # type: ignore
         time_entries_data = [
             (
@@ -251,8 +266,9 @@ def synch(store: Store, time_entries_only: bool) -> int:
                 datetime.strptime(te["timeInterval"]["start"], clockify_date_format),
                 datetime.strptime(te["timeInterval"]["end"], clockify_date_format),
                 # te["timeInterval"]["duration"],
-                (datetime.strptime(te["timeInterval"]["end"], clockify_date_format)
-                - datetime.strptime(te["timeInterval"]["start"], clockify_date_format)).total_seconds(),
+                get_clockify_diff_seconds(
+                    te["timeInterval"]["start"], te["timeInterval"]["end"]
+                ),
                 te["description"],
                 user,
                 None,  # Project
