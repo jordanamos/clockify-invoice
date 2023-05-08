@@ -10,8 +10,10 @@ from datetime import date
 from datetime import datetime
 from datetime import timedelta
 from typing import Any
-
-
+import itertools
+import threading
+import sys
+import time
 import werkzeug.wrappers
 from flask import Flask
 from flask import redirect
@@ -153,7 +155,7 @@ def clockify_session() -> Generator[Session, None, None]:
 
 
 def generate_invoice(store: Store) -> int:
-    workspace = store.get_default_workspace_id()
+    workspace = store.get_workspace_id()
     user = store.get_user_id()
     if not (workspace and user):
         print(
@@ -182,9 +184,31 @@ def generate_invoice(store: Store) -> int:
         period_end,
     )
 
-    print(invoice.__dict__())
+    print(dict(invoice.to_json()))
     return 0
-# 
+
+@contextlib.contextmanager
+def spinner(message: str) -> Generator[None, None, None]:
+    def spin() -> None:
+        while running:
+            sys.stdout.write(f"{next(spin_cycle)} {message}\r")
+            sys.stdout.flush()
+            time.sleep(0.1)
+            sys.stdout.write(clear)
+            sys.stdout.flush()
+
+    spin_cycle = itertools.cycle(["-", "\\", "|", "/"])
+    clear = f"\r{' ' * (len(message) + 2)}\r"
+    running = True
+    thread = threading.Thread(target=spin)
+    try:
+        thread.start()
+        yield
+    finally:
+        running = False
+        thread.join()
+        sys.stdout.write(clear)
+        sys.stdout.flush()
 
 def synch(store: Store, time_entries_only: bool) -> int:
     with (

@@ -73,7 +73,7 @@ class Store:
                 db.execute("DELETE FROM workspace")
                 db.execute("DELETE FROM time_entry")
 
-    def get_default_workspace_id(self) -> str | None:
+    def get_workspace_id(self) -> str | None:
         if not self._workspace_id:
             with self.connect() as db:
                 cur = db.execute(

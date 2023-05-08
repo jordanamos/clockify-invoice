@@ -32,7 +32,6 @@ class TimeEntry(NamedTuple):
 class Invoice:
     """
     A Class representation of an Invoice with clockify line items
-
     """
 
     def __init__(
