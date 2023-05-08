@@ -182,7 +182,7 @@ def generate_invoice(store: Store) -> int:
         period_end,
     )
 
-    print(invoice.__dict__)
+    print(invoice.__dict__())
     return 0
 # 
 

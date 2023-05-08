@@ -35,9 +35,6 @@ class Invoice:
 
     """
 
-    # TODO handle timezones
-    date_display_format = "%d/%m/%Y"
-
     def __init__(
         self,
         store: Store,
@@ -90,10 +87,19 @@ class Invoice:
             self.__dict__, default=self.convert_data, sort_keys=True, indent=4
         )
 
-    # def __dict__(self):
-    #     return {
-    #         "invoice_number": self.invoice_number
-    #     }
+    def __dict__(self):
+        return {
+            "invoice_number": self.invoice_number,
+            "company": {
+                "name": self.company.__dict__,
+            },
+            "client": {
+                "name": self.client.__dict__,
+            },
+            "period_start": self.period_start,
+            "period_end": self.period_end,
+            "time_entries": [entry._asdict() for entry in self.time_entries()],
+        }
 
 
 class Company:
