@@ -6,6 +6,18 @@ from typing import NamedTuple
 from datetime import datetime
 from clockify.store import Store
 
+TIME_ENTRIES_QUERY = """\
+SELECT MAX(end_time) AS date
+    , description
+    , SUM(duration_seconds)
+FROM time_entry
+WHERE user = ?
+    AND workspace = ?
+    AND start_time >= ?
+    AND end_time < ?
+    AND duration_seconds > 0
+GROUP BY description
+"""
 
 class TimeEntry(NamedTuple):
     date: datetime
@@ -32,17 +44,36 @@ class Invoice:
         invoice_number: str,
         company_name: str,
         client_name: str,
-        start_date: date,
-        end_date: date,
+        period_start: date,
+        period_end: date,
         invoice_date: date = date.today(),
-    ):
+    ) -> None:
         self.store = store
         self.invoice_date = invoice_date
         self.invoice_number = invoice_number
         self.company = Company(company_name)
         self.client = Client(client_name)
-        self.start_date = start_date
-        self.end_date = end_date
+        self.period_start = period_start
+        self.period_end = period_end
+
+    def time_entries(self) -> list[TimeEntry]:
+        with self.store.connect() as db:
+            rows = db.execute(
+                TIME_ENTRIES_QUERY, 
+                (self.store.get_user_id(), self.store.get_default_workspace_id(), self.period_start, self.period_end),
+            ).fetchall()
+
+        time_entries: list[TimeEntry] = []
+
+        for row in rows:
+            date = row[0]
+            description = row[1]
+            duration_seconds = int(row[2])
+            duration_hours = (round((duration_seconds / 3600) * 4) / 4) or 0.25 
+            time_entry = TimeEntry(date, description, duration_hours, 70.0)
+            time_entries.append(time_entry)
+            
+        return time_entries
 
     def convert_data(self, o: Any) -> Any:
         if isinstance(o, date):

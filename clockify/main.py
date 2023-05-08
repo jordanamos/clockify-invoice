@@ -11,6 +11,7 @@ from datetime import datetime
 from datetime import timedelta
 from typing import Any
 
+
 import werkzeug.wrappers
 from flask import Flask
 from flask import redirect
@@ -25,11 +26,20 @@ from weasyprint import HTML
 from clockify.api import APIKeyMissingError
 from clockify.api import APIServer
 from clockify.client import APISession
-from clockify.invoice import Invoice, TimeEntry
+from clockify.invoice import Invoice
 from clockify.store import Store
 
 app = Flask(__name__)
 
+API_KEY = os.getenv("CLOCKIFY_API_KEY")
+if API_KEY is None:
+    raise APIKeyMissingError(
+        """
+        'CLOCKIFY_API_KEY' environment variable not set.
+        Connection to Clockify's API requires an  API Key which can
+        be found in your user settings.
+        """
+    )
 
 @app.template_filter("format_date")
 def format_date(
@@ -117,8 +127,8 @@ def process_invoice() -> str:
 
 
 def run_interactive() -> int:
-    print(app.config["store"])
-    # app.run(host="0.0.0.0", port=5000, debug=True)
+    app.secret_key = API_KEY
+    app.run(host="0.0.0.0", port=5000, debug=True)
     return 0
 
 
@@ -133,9 +143,7 @@ def clockify_session() -> Generator[Session, None, None]:
             be found in your user settings.
             """
         )
-
-    app.secret_key = api_key
-
+    
     with contextlib.closing(Session()) as sess:
         sess.headers = {
             "X-Api-key": api_key,
@@ -154,9 +162,9 @@ def generate_invoice(store: Store) -> int:
         )
         return 1
 
-    # invoice_number = "1"
-    # invoice_company = "Jordan Amos"
-    # invoice_client = "6 Cloud Systems"
+    invoice_number = "1"
+    invoice_company = "Jordan Amos"
+    invoice_client = "6 Cloud Systems"
     today = date.today()
     period_date = date(today.year, today.month, 1) - timedelta(weeks=4)
     period_start = period_date.replace(day=1)
@@ -164,60 +172,17 @@ def generate_invoice(store: Store) -> int:
         day=cal.monthrange(period_date.year, period_date.month)[1]
     )
 
-    TIME_ENTRIES_QUERY = """\
-        SELECT MAX(end_time) AS date
-            , description
-            , SUM(duration_seconds)
-        FROM time_entry
-        WHERE user = ?
-            AND workspace = ?
-            AND start_time >= ?
-            AND end_time < ?
-            AND duration_seconds > 0
-        GROUP BY description
-        """
-    
-    with store.connect() as db:
-        rows = db.execute(
-            TIME_ENTRIES_QUERY, 
-            (user, workspace, period_start, period_end),
-        ).fetchall()
 
+    invoice = Invoice(
+        store,
+        invoice_number,
+        invoice_company,
+        invoice_client,
+        period_start,
+        period_end,
+    )
 
-    # 2023-04-11 04:30:24 2023-04-11 05:20:54 0:50:30 PT50M30S
-    # 2023-04-11 00:43:08 2023-04-11 01:46:33 1:03:25 PT1H3M25S
-    # 2023-04-10 22:28:44 2023-04-11 00:05:08 1:36:24 PT1H36M24S
-    # 2023-04-10 21:38:00 2023-04-10 22:20:00 0:42:00 PT42M
-    time_entries: list[TimeEntry] = []
-
-    for row in rows:
-        duration_hours = round((row[2] / 3600) * 4) / 4
-        if duration_hours == 0:
-            # nothing is for free
-            duration_hours = 0.25
-        time_entry = TimeEntry(row[0], row[1], duration_hours, 70.0)
-        time_entries.append(time_entry)
-
-    for e in time_entries:
-        print(e.billable_amount)
-        # start = datetime.strptime(row[0], clockify_date_format)
-        # end = datetime.strptime(row[1], clockify_date_format)
-        # diff = end - start
-        # print(start, end, diff, row[3])
-        # print(datetime.fromisoformat(row[2]))
-        # duration = datetime.strptime(row[2], 'PT%HH%Mm%Ss')
-        # total_seconds = duration.hour * 3600 + duration.minute * 60 + duration.second
-        # print(duration)
-        # print(total_seconds)
-    # invoice = Invoice(
-    #     store,
-    #     invoice_number,
-    #     invoice_company,
-    #     invoice_client,
-    #     period_start,
-    #     period_end,
-    # )
-    # print(invoice)
+    print(invoice.__dict__)
     return 0
 # 
 

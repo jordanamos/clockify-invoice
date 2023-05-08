@@ -8,15 +8,17 @@ class Store:
     def __init__(self) -> None:
         self.directory = self._get_default_directory()
         self.db_path = os.path.join(self.directory, "db.db")
-        self._workspace = None
+
+        self._workspace_id = None
         self._user_id = None
 
         if not os.path.exists(self.directory):
             os.makedirs(self.directory, exist_ok=True)
 
-        if os.path.exists(self.db_path):
-            return
+        if not os.path.exists(self.db_path):
+            self.create_db()
 
+    def create_db(self) -> None:
         with self.connect() as db:
             # Create tables
             db.execute(
@@ -44,30 +46,6 @@ class Store:
 
             db.execute(
                 """
-                CREATE TABLE client (
-                    id TEXT PRIMARY KEY,
-                    name TEXT,
-                    workspace TEXT,
-                    FOREIGN KEY (workspace) REFERENCES workspace(id)
-                )
-            """
-            )
-
-            db.execute(
-                """
-                CREATE TABLE project (
-                    id TEXT PRIMARY KEY,
-                    name TEXT,
-                    client TEXT,
-                    workspace TEXT,
-                    FOREIGN KEY (client) REFERENCES client(id),
-                    FOREIGN KEY (workspace) REFERENCES workspace(id)
-                )
-            """
-            )
-
-            db.execute(
-                """
                 CREATE TABLE time_entry (
                     id TEXT PRIMARY KEY,
                     start_time TEXT,
@@ -75,10 +53,8 @@ class Store:
                     duration_seconds INT,
                     description TEXT,
                     user TEXT,
-                    project TEXT,
                     workspace TEXT,
                     FOREIGN KEY (user) REFERENCES user(id),
-                    FOREIGN KEY (project) REFERENCES project(id),
                     FOREIGN KEY (workspace) REFERENCES workspace(id)
                 )
             """
@@ -96,21 +72,19 @@ class Store:
                 db.execute("DELETE FROM user")
                 db.execute("DELETE FROM workspace")
                 db.execute("DELETE FROM time_entry")
-                db.execute("DELETE FROM client")
-                db.execute("DELETE FROM project")
 
     def get_default_workspace_id(self) -> str | None:
-        if not self._workspace:
+        if not self._workspace_id:
             with self.connect() as db:
                 cur = db.execute(
                     "SELECT COALESCE(active_workspace, default_workspace) FROM user"
                 )
                 result = cur.fetchone()
                 try:
-                    self._workspace = result[0]
+                    self._workspace_id = result[0]
                 except TypeError:
-                    self._workspace = None
-        return self._workspace
+                    self._workspace_id = None
+        return self._workspace_id
 
     def get_user_id(self) -> str | None:
         if not self._user_id:
