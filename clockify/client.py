@@ -12,8 +12,8 @@ class APISession:
 
     clockify_datetime_format = "%Y-%m-%dT%H:%M:%SZ"
 
-    def __init__(self, APIServer: APIServer) -> None:
-        self.api = APIServer
+    def __init__(self, api: APIServer) -> None:
+        self.api = api
         # self.user = self.get_user()
         # self.user_id = self.user["id"]
         # self.email = self.user["email"]

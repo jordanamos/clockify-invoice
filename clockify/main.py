@@ -22,7 +22,6 @@ from flask import wrappers
 from requests import Session
 from weasyprint import HTML
 
-from clockify import client
 from clockify.api import APIKeyMissingError
 from clockify.api import APIServer
 from clockify.client import APISession
@@ -48,7 +47,6 @@ def format_date(
 @app.route("/download", methods=["GET"])
 def download() -> wrappers.Response | werkzeug.wrappers.Response:
     if "invoice" in session:
-        # invoice = json.loads(session.__dict__)
         invoice = json.loads(session.get("invoice", ""))
         invoice_name = "invoice.pdf"
         form_data = {
@@ -72,6 +70,7 @@ def download() -> wrappers.Response | werkzeug.wrappers.Response:
 
 @app.route("/", methods=["GET", "POST"])
 def process_invoice() -> str:
+    store = app.config["store"]
     invoice_company = "Jordan Amos"
     invoice_client = "6 Cloud Systems"
 
@@ -90,9 +89,9 @@ def process_invoice() -> str:
 
     if form_data["invoice-period"] == "last-month":
         period_date = period_date - timedelta(weeks=4)
-    if form_data["invoice-period"] == "two-months-ago":
+    elif form_data["invoice-period"] == "two-months-ago":
         period_date = period_date - timedelta(weeks=8)
-    if form_data["invoice-period"] == "three-months-ago":
+    elif form_data["invoice-period"] == "three-months-ago":
         period_date = period_date - timedelta(weeks=12)
 
     period_start = period_date.replace(day=1)
@@ -100,15 +99,14 @@ def process_invoice() -> str:
         day=cal.monthrange(period_date.year, period_date.month)[1]
     )
 
-    with clockify_session() as sess:
-        invoice = Invoice(
-            client.APISession(APIServer(sess)),
-            invoice_number,
-            invoice_company,
-            invoice_client,
-            period_start,
-            period_end,
-        )
+    invoice = Invoice(
+        store,
+        invoice_number,
+        invoice_company,
+        invoice_client,
+        period_start,
+        period_end,
+    )
 
     session["invoice"] = invoice.to_json()
     rendered_invoice = render_template(
@@ -119,7 +117,8 @@ def process_invoice() -> str:
 
 
 def run_interactive() -> int:
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    print(app.config["store"])
+    # app.run(host="0.0.0.0", port=5000, debug=True)
     return 0
 
 
@@ -149,8 +148,61 @@ def generate_invoice(store: Store) -> int:
     workspace = store.get_default_workspace_id()
     user = store.get_user_id()
     if not (workspace and user):
-        ...
+        print(
+            f"Unable to generate invoice: User ({user}) or "
+            f"Workspace ({workspace}) has 'None' value."
+        )
+        return 1
 
+    # invoice_number = "1"
+    # invoice_company = "Jordan Amos"
+    # invoice_client = "6 Cloud Systems"
+    today = date.today()
+    period_date = date(today.year, today.month, 1) - timedelta(weeks=4)
+    period_start = period_date.replace(day=1)
+    period_end = period_date.replace(
+        day=cal.monthrange(period_date.year, period_date.month)[1]
+    )
+
+    TIME_ENTRIES_QUERY = """\
+        SELECT start_time AS item_date
+            , end_time
+            , description
+            , duration
+        FROM time_entry
+        WHERE user = ?
+            AND workspace = ?
+            AND start_time >= ?
+            AND end_time < ?
+        """
+
+    with store.connect() as db:
+        cur = db.execute(
+            TIME_ENTRIES_QUERY, (user, workspace, period_start, period_end)
+        )
+        rows = cur.fetchall()
+    clockify_date_format = "%Y-%m-%dT%H:%M:%SZ"  # ISO 8601
+
+    for row in rows:
+        # print(row)
+        start = datetime.strptime(row[0], clockify_date_format)
+        end = datetime.strptime(row[1], clockify_date_format)
+        diff = end - start
+        print(start, end, diff, row[3])
+        # print(datetime.fromisoformat(row[2]))
+        # duration = datetime.strptime(row[2], 'PT%HH%Mm%Ss')
+        # total_seconds = duration.hour * 3600 + duration.minute * 60 + duration.second
+        # print(duration)
+        # print(total_seconds)
+    # invoice = Invoice(
+    #     store,
+    #     invoice_number,
+    #     invoice_company,
+    #     invoice_client,
+    #     period_start,
+    #     period_end,
+    # )
+    # print(invoice)
     return 0
 
 
@@ -182,15 +234,25 @@ def synch(store: Store, time_entries_only: bool) -> int:
             store.clear_db("time_entry")
 
         workspace = store.get_default_workspace_id()
-        user = store.get_user_id()
+        user = store.get_user_id()  # type: ignore
+        if workspace is None or user is None:
+            print(
+                f"Unable to fetch time entries: User ({user}) or "
+                f"Workspace ({workspace}) has 'None' value."
+            )
+            return 1
 
-        time_entries = api_session.get_time_entries(workspace, user)
+        clockify_date_format = "%Y-%m-%dT%H:%M:%SZ"  # ISO 8601
+
+        time_entries = api_session.get_time_entries(workspace, user)  # type: ignore
         time_entries_data = [
             (
                 te["id"],
-                te["timeInterval"]["start"],
-                te["timeInterval"]["end"],
-                te["timeInterval"]["duration"],
+                datetime.strptime(te["timeInterval"]["start"], clockify_date_format),
+                datetime.strptime(te["timeInterval"]["end"], clockify_date_format),
+                # te["timeInterval"]["duration"],
+                datetime.strptime(te["timeInterval"]["end"], clockify_date_format)
+                - datetime.strptime(te["timeInterval"]["start"], clockify_date_format),
                 te["description"],
                 user,
                 None,  # Project
@@ -236,6 +298,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "invoice":
         if args.interactive_mode:
+            app.config["store"] = store
             return run_interactive()
         return generate_invoice(store)
     elif args.command == "synch":
