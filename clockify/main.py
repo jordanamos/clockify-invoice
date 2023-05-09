@@ -38,7 +38,7 @@ app = Flask(__name__)
 
 @app.template_filter("format_date")
 def format_date(
-    value: Any, informat: str = "%d/%m/%Y", outformat: str = "%d/%m/%Y"
+    value: Any, informat: str = "%Y-%m-%d", outformat: str = "%d/%m/%Y"
 ) -> str:
     if not isinstance(value, date):
         try:
@@ -105,23 +105,17 @@ def process_invoice() -> str:
         day=cal.monthrange(period_date.year, period_date.month)[1]
     )
 
-    if "invoice" in session:
-        invoice: Invoice = session["invoice"]
-        invoice.invoice_number = invoice_number
-        invoice.period_start = period_start
-        invoice.period_end = period_end
-    else:
-        store = app.config["store"]
-        invoice = Invoice(
-            store,
-            invoice_number,
-            invoice_company,
-            invoice_client,
-            period_start,
-            period_end,
-        )
+    store = app.config["store"]
+    invoice = Invoice(
+        store,
+        invoice_number,
+        invoice_company,
+        invoice_client,
+        period_start,
+        period_end,
+    )
 
-    session["invoice"] = invoice
+    session["invoice"] = invoice.to_json()
     rendered_invoice = render_template(
         "invoice.html", invoice=invoice.to_dict(), form_data=form_data
     )
@@ -130,6 +124,7 @@ def process_invoice() -> str:
 
 
 def run_interactive() -> int:
+    app.secret_key = "jo"
     app.run(host="0.0.0.0", port=5000, debug=True)
     return 0
 
@@ -185,8 +180,7 @@ def generate_invoice(store: Store) -> int:
         period_end,
     )
 
-    # print(invoice.to_json())
-    # print(invoice.to_dict())
+    print(invoice)
     return 0
 
 

@@ -110,12 +110,9 @@ class Invoice:
     def to_dict(self) -> dict[str, Any]:
         return {
             "invoice_number": self.invoice_number,
-            "company": {
-                "name": self.company.__dict__,
-            },
-            "client": {
-                "name": self.client.__dict__,
-            },
+            "invoice_date": str(self.invoice_date),
+            "company": self.company.__dict__,
+            "client": self.client.__dict__,
             "period_start": str(self.period_start),
             "period_end": str(self.period_end),
             "time_entries": [entry._asdict() for entry in self.time_entries],

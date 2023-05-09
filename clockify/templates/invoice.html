@@ -234,10 +234,10 @@
               {% for time_entry in invoice['time_entries'] %}
               <tr class="item {% if loop.last %}last{% endif %}">
                 <td></td>
-                <td>{{invoice['time_entries'][time_entry].description}}</td>
-                <td>{{invoice['time_entries'][time_entry].time_spent_frac}}</td>
-                <td>{{invoice['time_entries'][time_entry].rate}}</td>
-                <td>${{invoice['time_entries'][time_entry].amount}}</td>
+                <td>{{time_entry.description}}</td>
+                <td>{{time_entry.duration_hours}}</td>
+                <td>{{time_entry.rate}}</td>
+                <td>${{time_entry.duration_hours * time_entry.rate}}</td>
               </tr>
               {% endfor %}
 
@@ -246,7 +246,7 @@
                 <td></td>
                 <td></td>
                 <td></td>
-                <td>Total: ${{invoice['_total']}}</td>
+                <td>Total: ${{invoice['total']}}</td>
               </tr>
             </table>
           </div>
