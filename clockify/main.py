@@ -3,6 +3,7 @@ import calendar as cal
 import contextlib
 import io
 import itertools
+import logging
 import os
 import sqlite3
 import sys
@@ -33,6 +34,14 @@ from clockify.client import APISession
 from clockify.invoice import Invoice
 from clockify.store import Store
 
+PERIODS = (
+    "this-month",
+    "last-month",
+    "two-months-ago",
+    "three-months-ago",
+)
+
+logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 
@@ -180,7 +189,8 @@ def generate_invoice(store: Store) -> int:
         period_end,
     )
 
-    print(invoice)
+    print(invoice.invoice_name)
+
     return 0
 
 

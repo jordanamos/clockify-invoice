@@ -4,6 +4,8 @@ from datetime import datetime
 from typing import Any
 from typing import NamedTuple
 
+import tabulate
+
 from clockify.store import Store
 
 TIME_ENTRIES_QUERY = """\
@@ -31,7 +33,7 @@ class TimeEntry(NamedTuple):
         return self.duration_hours * self.rate
 
 
-class Invoice:
+class Invoice(json.JSONEncoder):
     """
     A Class representation of an Invoice with clockify line items
     """
@@ -77,6 +79,10 @@ class Invoice:
     def time_entries(self) -> list[TimeEntry]:
         return self._time_entries
 
+    @property
+    def invoice_name(self) -> str:
+        return f"{self.invoice_date.strftime('%Y_%m')}_Invoice_{self.invoice_number}"
+
     def _get_time_entries(self) -> list[TimeEntry]:
         with self.store.connect() as db:
             rows = db.execute(
@@ -92,8 +98,8 @@ class Invoice:
         entries: list[TimeEntry] = []
 
         for row in rows:
-            date = row[0]
-            description = row[1]
+            date = datetime.strptime(row[0], "%Y-%m-%d %H:%M:%S")
+            description = str(row[1])
             duration_seconds = int(row[2])
             duration_hours = (round((duration_seconds / 3600) * 4) / 4) or 0.25
             time_entry = TimeEntry(date, description, duration_hours, 70.0)
@@ -104,20 +110,40 @@ class Invoice:
     def total(self) -> float:
         return sum(entry.billable_amount for entry in self.time_entries)
 
+    def default(self, o: Any) -> Any:
+        if isinstance(o, date):
+            return o.strftime("%d/%m/%Y")
+        return json.JSONEncoder.default(self, o)
+
     def to_json(self) -> str:
-        return json.dumps(self.to_dict(), sort_keys=True, indent=4)
+        return json.dumps(
+            self.to_dict(), default=self.default, sort_keys=True, indent=4
+        )
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "invoice_number": self.invoice_number,
-            "invoice_date": str(self.invoice_date),
+            "invoice_date": self.invoice_date,
             "company": self.company.__dict__,
             "client": self.client.__dict__,
-            "period_start": str(self.period_start),
-            "period_end": str(self.period_end),
+            "period_start": self.period_start,
+            "period_end": self.period_end,
             "time_entries": [entry._asdict() for entry in self.time_entries],
             "total": self.total,
         }
+
+    def __str__(self) -> str:
+        table_data = [
+            (entry.date, entry.description, entry.duration_hours, entry.billable_amount)
+            for entry in self.time_entries
+        ]
+        headers = ["Date", "Description", "Duration", "Billable Amount"]
+        table_str = tabulate.tabulate(table_data, headers=headers)
+        return (
+            f"Invoice {self.invoice_number} ({self.invoice_date}):"
+            f"\n\n{table_str}\n\n"
+            f"Total: {self.total}"
+        )
 
 
 class Company:
