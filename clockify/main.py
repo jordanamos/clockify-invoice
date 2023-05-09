@@ -5,6 +5,7 @@ import io
 import itertools
 import logging
 import os
+import pickle
 import sqlite3
 import sys
 import tempfile
@@ -15,18 +16,14 @@ from collections.abc import Sequence
 from datetime import date
 from datetime import datetime
 from datetime import timedelta
-from typing import Any
 
 import werkzeug.wrappers
 from flask import Flask
 from flask import redirect
-from flask import render_template
 from flask import request
 from flask import send_file
 from flask import session
-from flask import wrappers
 from requests import Session
-from weasyprint import HTML
 
 from clockify.api import APIKeyMissingError
 from clockify.api import APIServer
@@ -46,67 +43,35 @@ app = Flask(__name__)
 
 
 @app.template_filter("format_date")
-def format_date(
-    value: Any, informat: str = "%Y-%m-%d", outformat: str = "%d/%m/%Y"
-) -> str:
-    if not isinstance(value, date):
-        try:
-            return datetime.strptime(value, informat).strftime(outformat)
-        except ValueError:
-            return f"Error parsing date [{value}]"
-    else:
-        return value.strftime(outformat)
+def format_date(value: date, format: str = "%d/%m/%Y") -> str:
+    return value.strftime(format)
 
 
 @app.route("/download", methods=["GET"])
-def download() -> wrappers.Response | werkzeug.wrappers.Response:
+def download() -> werkzeug.wrappers.Response:
     if "invoice" not in session:
         return redirect("/")
 
-    invoice: Invoice = session["invoice"]
-    invoice_name = "invoice.pdf"
-    form_data = {
-        "display-form": "none",
-    }
-    rendered_invoice = render_template(
-        "invoice.html", invoice=invoice, form_data=form_data
+    invoice: Invoice = pickle.loads(session["invoice"])
+    return send_file(
+        io.BytesIO(invoice.pdf(form_data={"display-form": "none"})),
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=invoice.invoice_name,  # type: ignore
     )
-    html = HTML(string=rendered_invoice)
-    rendered_pdf = html.write_pdf()
-
-    if rendered_pdf:
-        return send_file(
-            io.BytesIO(rendered_pdf),
-            mimetype="application/pdf",
-            download_name=invoice_name,  # type: ignore
-            as_attachment=True,
-        )
-    return redirect("/")
 
 
-@app.route("/", methods=["GET", "POST"])
-def process_invoice() -> str:
-    invoice_company = "Jordan Amos"
-    invoice_client = "6 Cloud Systems"
+def get_period_dates(period: str, today: date = date.today()) -> tuple[date, date]:
+    PERIODS = ("this-month", "last-month", "two-months-ago", "three-months-ago")
+    if period not in PERIODS:
+        raise ValueError(f"Invalid period: {period}")
 
-    form_data = {
-        "invoice-number": "1",
-        "invoice-period": "this-month",
-        "display-form": "block",
-    }
-
-    if request.method == "POST":
-        form_data.update(request.form)
-
-    invoice_number = form_data["invoice-number"]
-    today = date.today()
     period_date = date(today.year, today.month, 1)
-
-    if form_data["invoice-period"] == "last-month":
+    if period == "last-month":
         period_date = period_date - timedelta(weeks=4)
-    elif form_data["invoice-period"] == "two-months-ago":
+    elif period == "two-months-ago":
         period_date = period_date - timedelta(weeks=8)
-    elif form_data["invoice-period"] == "three-months-ago":
+    elif period == "three-months-ago":
         period_date = period_date - timedelta(weeks=12)
 
     period_start = period_date.replace(day=1)
@@ -114,22 +79,46 @@ def process_invoice() -> str:
         day=cal.monthrange(period_date.year, period_date.month)[1]
     )
 
-    store = app.config["store"]
-    invoice = Invoice(
-        store,
-        invoice_number,
-        invoice_company,
-        invoice_client,
-        period_start,
-        period_end,
-    )
+    return period_start, period_end
 
-    session["invoice"] = invoice.to_json()
-    rendered_invoice = render_template(
-        "invoice.html", invoice=invoice.to_dict(), form_data=form_data
-    )
 
-    return rendered_invoice
+@app.route("/", methods=["GET", "POST"])
+def process_invoice() -> str:
+    # set the form defaults
+    form_data = {
+        "invoice-number": "1",
+        "invoice-period": "last-month",
+        "display-form": "block",
+    }
+
+    if request.method == "POST":
+        form_data.update(request.form)
+
+    invoice_number = form_data["invoice-number"]
+    period_start, period_end = get_period_dates(form_data["invoice-period"])
+
+    if "invoice" in session:
+        invoice: Invoice = pickle.loads(session["invoice"])
+        invoice.invoice_number = invoice_number
+        invoice.period_start = period_start
+        invoice.period_end = period_end
+        invoice.update_time_entries()
+    else:
+        store: Store = app.config["store"]
+        invoice_company = "Jordan Amos"
+        invoice_client = "6 Cloud Systems"
+        invoice = Invoice(
+            store,
+            invoice_number,
+            invoice_company,
+            invoice_client,
+            period_start,
+            period_end,
+        )
+
+    session["invoice"] = pickle.dumps(invoice)
+
+    return invoice.html(form_data=form_data)
 
 
 def run_interactive() -> int:

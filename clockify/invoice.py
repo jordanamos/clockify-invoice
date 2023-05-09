@@ -1,10 +1,11 @@
-import json
 from datetime import date
 from datetime import datetime
 from typing import Any
 from typing import NamedTuple
 
 import tabulate
+from flask import render_template
+from weasyprint import HTML
 
 from clockify.store import Store
 
@@ -33,7 +34,7 @@ class TimeEntry(NamedTuple):
         return self.duration_hours * self.rate
 
 
-class Invoice(json.JSONEncoder):
+class Invoice:
     """
     A Class representation of an Invoice with clockify line items
     """
@@ -53,27 +54,10 @@ class Invoice(json.JSONEncoder):
         self.invoice_number = invoice_number
         self.company = Company(company_name)
         self.client = Client(client_name)
-        self._period_start = period_start
-        self._period_end = period_end
-        self._time_entries = self._get_time_entries()
+        self.period_start = period_start
+        self.period_end = period_end
 
-    @property
-    def period_start(self) -> date:
-        return self._period_start
-
-    @period_start.setter
-    def period_start(self, value: date) -> None:
-        self._period_start = value
-        self._time_entries = self._get_time_entries()
-
-    @property
-    def period_end(self) -> date:
-        return self._period_end
-
-    @period_end.setter
-    def period_end(self, value: date) -> None:
-        self._period_end = value
-        self._time_entries = self._get_time_entries()
+        self.update_time_entries()
 
     @property
     def time_entries(self) -> list[TimeEntry]:
@@ -81,9 +65,11 @@ class Invoice(json.JSONEncoder):
 
     @property
     def invoice_name(self) -> str:
-        return f"{self.invoice_date.strftime('%Y_%m')}_Invoice_{self.invoice_number}"
+        return (
+            f"{self.invoice_date.strftime('%Y_%m')}_Invoice_{self.invoice_number}.pdf"
+        )
 
-    def _get_time_entries(self) -> list[TimeEntry]:
+    def update_time_entries(self) -> None:
         with self.store.connect() as db:
             rows = db.execute(
                 TIME_ENTRIES_QUERY,
@@ -104,21 +90,22 @@ class Invoice(json.JSONEncoder):
             duration_hours = (round((duration_seconds / 3600) * 4) / 4) or 0.25
             time_entry = TimeEntry(date, description, duration_hours, 70.0)
             entries.append(time_entry)
-        return entries
+        self._time_entries = entries
 
     @property
     def total(self) -> float:
         return sum(entry.billable_amount for entry in self.time_entries)
 
-    def default(self, o: Any) -> Any:
-        if isinstance(o, date):
-            return o.strftime("%d/%m/%Y")
-        return json.JSONEncoder.default(self, o)
+    def html(self, **kwargs: dict[str, Any]) -> str:
+        """Render the invoice html"""
+        return render_template("invoice.html", invoice=self.to_dict(), **kwargs)
 
-    def to_json(self) -> str:
-        return json.dumps(
-            self.to_dict(), default=self.default, sort_keys=True, indent=4
-        )
+    def pdf(self, **kwargs: dict[str, Any]) -> bytes:
+        html = HTML(string=self.html(**kwargs))
+        ret = html.write_pdf(target=None)
+        if not ret:
+            raise ValueError("Error generating invoice pdf")
+        return ret
 
     def to_dict(self) -> dict[str, Any]:
         return {
