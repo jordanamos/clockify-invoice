@@ -262,7 +262,7 @@ def synch_time_entries(
         )
         for te in time_entries
     ]
-    db.executemany("INSERT INTO time_entry VALUES(?,?,?,?,?,?,?,?)", time_entries_data)
+    db.executemany("INSERT INTO time_entry VALUES(?,?,?,?,?,?,?)", time_entries_data)
 
 
 def synch(store: Store) -> int:
