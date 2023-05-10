@@ -26,6 +26,7 @@ from flask import session
 
 from clockify.api import ClockifyClient
 from clockify.api import ClockifySession
+from clockify.api import ClockifySessionURLLIB
 from clockify.invoice import Invoice
 from clockify.store import Store
 
@@ -276,7 +277,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                 return run_interactive(store, sess.api_key)
             return generate_invoice(store)
         elif args.command == "synch":
-            return synch(store, sess)
+            start = time.time()
+
+            ret = synch(store, sess)
+            print(f"synched in {time.time() - start}")
+            return ret
     return 0
 
 

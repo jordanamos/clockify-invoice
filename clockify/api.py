@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import os
+import urllib.request
 from datetime import date
 from json.decoder import JSONDecodeError
 from typing import Any
@@ -37,6 +39,37 @@ class ClockifySession(Session):
             return response.json()
         except JSONDecodeError:
             msg = f"Unable to parse response as JSON: '{response.text}'"
+            raise APIResponseParseException(msg)
+
+
+class ClockifySessionURLLIB:
+    API_BASE_ENDPOINT = "https://api.clockify.me/api/v1"
+
+    def __init__(self) -> None:
+        api_key = os.getenv("CLOCKIFY_API_KEY")
+        if api_key is None:
+            raise APIKeyMissingError(
+                "'CLOCKIFY_API_KEY' environment variable not set.\n"
+                "Connection to Clockify's API requires an API Key which can"
+                "be found in your user settings."
+            )
+        self.api_key = api_key
+        self.headers = {
+            "X-Api-key": api_key,
+            "content-type": "application/json",
+        }
+
+    def get_clockify(self, endpoint: str, params: dict[str, str] = {}) -> Any:
+        """Performs a "GET" request to the clockify API. Returns the JSON response."""
+        url = f"{self.API_BASE_ENDPOINT}/{endpoint}"
+        request = urllib.request.Request(url, headers=self.headers)
+        resp = urllib.request.urlopen(request)
+        print(resp)
+        print(vars(resp))
+        try:
+            return json.load(resp)
+        except JSONDecodeError:
+            msg = f"Unable to parse response as JSON: '{resp}'"
             raise APIResponseParseException(msg)
 
 
