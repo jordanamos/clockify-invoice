@@ -13,20 +13,13 @@ class ClockifySession:
     API_BASE_ENDPOINT = "https://api.clockify.me/api/v1"
 
     def __init__(self) -> None:
-        api_key = os.getenv("CLOCKIFY_API_KEY")
-        if api_key is None:
-            raise APIKeyMissingError(
-                "'CLOCKIFY_API_KEY' environment variable not set.\n"
-                "Connection to Clockify's API requires an API Key which can"
-                "be found in your user settings."
-            )
-        self.api_key = api_key
+        self.api_key = self.get_api_key()
+        self.connection = http.client.HTTPSConnection("api.clockify.me")
         self.headers = {
-            "X-Api-key": api_key,
+            "X-Api-key": self.api_key,
             "content-type": "application/json",
             "Connection": "keep-alive",
         }
-        self.connection = http.client.HTTPSConnection("api.clockify.me")
 
     def __enter__(self) -> ClockifySession:
         return self
@@ -37,6 +30,20 @@ class ClockifySession:
         exc_value: BaseException | None,
         exc_traceback: TracebackType | None,
     ) -> None:
+        self.close()
+
+    @staticmethod
+    def get_api_key() -> str:
+        api_key = os.getenv("CLOCKIFY_API_KEY")
+        if api_key is None:
+            raise APIKeyMissingError(
+                "'CLOCKIFY_API_KEY' environment variable not set.\n"
+                "Connection to Clockify's API requires an API Key which can"
+                "be found in your user settings."
+            )
+        return api_key
+
+    def close(self) -> None:
         self.connection.close()
 
     def _request(
@@ -63,33 +70,31 @@ class ClockifySession:
 
 
 class ClockifyClient:
-    CLOCKIFY_DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
-
-    def __init__(self, api: ClockifySession) -> None:
-        self.api = api
+    def __init__(self, session: ClockifySession) -> None:
+        self.session = session
 
     def get_user(self) -> dict[str, Any]:
-        return self.api.get("user")
+        return self.session.get("user")
 
     def get_workspaces(self) -> list[dict[str, Any]]:
-        return self.api.get("workspaces")
+        return self.session.get("workspaces")
 
     def get_time_entries(
         self,
         workspace_id: str,
         user_id: str,
     ) -> list[dict[str, Any]]:
-        path = f"/workspaces/{workspace_id}/user/{user_id}/time-entries"
-        return self.api.get(path)
+        path = f"workspaces/{workspace_id}/user/{user_id}/time-entries"
+        return self.session.get(path)
 
 
 class ClockifyAPIException(Exception):
     pass
 
 
-class APIKeyMissingError(ClockifyAPIException):
+class APIKeyMissingError(Exception):
     pass
 
 
-class APIResponseParseException(ClockifyAPIException):
+class APIResponseParseException(Exception):
     pass

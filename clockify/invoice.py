@@ -121,28 +121,38 @@ class Invoice:
 
     def __str__(self) -> str:
         table_data = [
-            (entry.date, entry.description, entry.duration_hours, entry.billable_amount)
+            (
+                datetime.strftime(entry.date, "%d/%m/%Y"),
+                entry.description,
+                entry.duration_hours,
+                entry.rate,
+                entry.billable_amount,
+            )
             for entry in self.time_entries
         ]
-        headers = ["Date", "Description", "Duration", "Billable Amount"]
+        headers = ["Date", "Description", "Time Spent", "Rate", "Amount"]
         table_str = tabulate.tabulate(table_data, headers=headers)
         return (
-            f"Invoice {self.invoice_number} ({self.invoice_date}):"
-            f"\n\n{table_str}\n\n"
-            f"Total: {self.total}"
+            f"Invoice #: {self.invoice_number}\n"
+            f"Invoice Date: {self.invoice_date}:\n"
+            f"Payee: {self.company.name}\n"
+            f"Payer: {self.client.name}\n"
+            f"Invoice Period: {self.period_start} to {self.period_end}\n\n"
+            f"{table_str}\n\n"
+            f"Total: {self.total}\n"
         )
 
 
 class Company:
-    def __init__(self, company_name: str):
-        self.company_name = company_name
+    def __init__(self, name: str):
+        self.name = name
         self.email = "jordan.amos@gmail.com"
         self.abn = "47 436 539 044"
         self.rate = 70.00
 
 
 class Client:
-    def __init__(self, client_name: str):
-        self.client_name = client_name
-        self.client_contact = "John Scott"
+    def __init__(self, name: str):
+        self.name = name
+        self.contact = "John Scott"
         self.email = "john.scott@6cloudsystems.com"
