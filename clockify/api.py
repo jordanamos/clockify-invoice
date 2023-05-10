@@ -3,7 +3,6 @@ from __future__ import annotations
 import http.client
 import json
 import os
-from datetime import date
 from json.decoder import JSONDecodeError
 from types import TracebackType
 from typing import Any
