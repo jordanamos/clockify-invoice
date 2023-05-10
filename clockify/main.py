@@ -123,7 +123,7 @@ def generate_invoice(
     invoice_company = "Jordan Amos"
     invoice_client = "6 Cloud Systems"
 
-    _, days_in_month = cal.monthrange(year, month)
+    _weekdays, days_in_month = cal.monthrange(year, month)
     period_start, period_end = date(year, month, 1), date(year, month, days_in_month)
 
     invoice = Invoice(
@@ -134,7 +134,9 @@ def generate_invoice(
         period_start,
         period_end,
     )
+
     print(invoice)
+
     return 0
 
 
