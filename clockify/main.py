@@ -26,7 +26,6 @@ from flask import session
 
 from clockify.api import ClockifyClient
 from clockify.api import ClockifySession
-from clockify.api import ClockifySession1
 from clockify.invoice import Invoice
 from clockify.store import Store
 
@@ -271,7 +270,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     store = Store()
-    with ClockifySession1() as sess:
+    with ClockifySession() as sess:
         if args.command == "invoice":
             if args.interactive_mode:
                 return run_interactive(store, sess.api_key)
