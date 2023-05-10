@@ -15,7 +15,7 @@ from collections.abc import Generator
 from collections.abc import Sequence
 from datetime import date
 from datetime import datetime
-from datetime import timedelta
+from typing import Any
 
 import werkzeug.wrappers
 from flask import Flask
@@ -23,20 +23,11 @@ from flask import redirect
 from flask import request
 from flask import send_file
 from flask import session
-from requests import Session
 
-from clockify.api import APIKeyMissingError
-from clockify.api import APIServer
-from clockify.client import APISession
+from clockify.api import ClockifyClient
+from clockify.api import ClockifySession
 from clockify.invoice import Invoice
 from clockify.store import Store
-
-PERIODS = (
-    "this-month",
-    "last-month",
-    "two-months-ago",
-    "three-months-ago",
-)
 
 logger = logging.getLogger(__name__)
 app = Flask(__name__)
@@ -61,41 +52,28 @@ def download() -> werkzeug.wrappers.Response:
     )
 
 
-def get_period_dates(period: str, today: date = date.today()) -> tuple[date, date]:
-    PERIODS = ("this-month", "last-month", "two-months-ago", "three-months-ago")
-    if period not in PERIODS:
-        raise ValueError(f"Invalid period: {period}")
-
-    period_date = date(today.year, today.month, 1)
-    if period == "last-month":
-        period_date = period_date - timedelta(weeks=4)
-    elif period == "two-months-ago":
-        period_date = period_date - timedelta(weeks=8)
-    elif period == "three-months-ago":
-        period_date = period_date - timedelta(weeks=12)
-
-    period_start = period_date.replace(day=1)
-    period_end = period_date.replace(
-        day=cal.monthrange(period_date.year, period_date.month)[1]
-    )
-
-    return period_start, period_end
-
-
 @app.route("/", methods=["GET", "POST"])
 def process_invoice() -> str:
-    # set the form defaults
-    form_data = {
-        "invoice-number": "1",
-        "invoice-period": "last-month",
+    today = date.today()
+    years = list(range(today.year, today.year - 5, -1))
+
+    form_data: dict[str, Any] = {
+        "months": list(cal.month_name[1:]),
+        "years": years,
         "display-form": "block",
+        "invoice-number": "1",
+        "month": today.month,
+        "year": today.year,
     }
 
     if request.method == "POST":
         form_data.update(request.form)
 
+    year, month = int(form_data["year"]), int(form_data["month"])
+    _, days_in_month = cal.monthrange(year, month)
+    period_start, period_end = date(year, month, 1), date(year, month, days_in_month)
+
     invoice_number = form_data["invoice-number"]
-    period_start, period_end = get_period_dates(form_data["invoice-period"])
 
     if "invoice" in session:
         invoice: Invoice = pickle.loads(session["invoice"])
@@ -121,32 +99,11 @@ def process_invoice() -> str:
     return invoice.html(form_data=form_data)
 
 
-def run_interactive() -> int:
-    app.secret_key = "jo"
+def run_interactive(store: Store, api_key: str) -> int:
+    app.config["store"] = store
+    app.secret_key = api_key
     app.run(host="0.0.0.0", port=5000, debug=True)
     return 0
-
-
-@contextlib.contextmanager
-def clockify_session() -> Generator[Session, None, None]:
-    api_key = os.getenv("CLOCKIFY_API_KEY")
-
-    if api_key is None:
-        raise APIKeyMissingError(
-            """
-            'CLOCKIFY_API_KEY' environment variable not set.
-            Connection to Clockify's API requires an  API Key which can
-            be found in your user settings.
-            """
-        )
-    app.secret_key = api_key
-
-    with contextlib.closing(Session()) as sess:
-        sess.headers = {
-            "X-Api-key": api_key,
-            "content-type": "application/json",
-        }
-        yield sess
 
 
 def generate_invoice(store: Store) -> int:
@@ -162,12 +119,11 @@ def generate_invoice(store: Store) -> int:
     invoice_number = "1"
     invoice_company = "Jordan Amos"
     invoice_client = "6 Cloud Systems"
+
     today = date.today()
-    period_date = date(today.year, today.month, 1) - timedelta(weeks=4)
-    period_start = period_date.replace(day=1)
-    period_end = period_date.replace(
-        day=cal.monthrange(period_date.year, period_date.month)[1]
-    )
+    year, month = today.year, today.month
+    _, days_in_month = cal.monthrange(year, month)
+    period_start, period_end = date(year, month, 1), date(year, month, days_in_month)
 
     invoice = Invoice(
         store,
@@ -177,9 +133,7 @@ def generate_invoice(store: Store) -> int:
         period_start,
         period_end,
     )
-
-    print(invoice.invoice_name)
-
+    print(invoice)
     return 0
 
 
@@ -207,7 +161,7 @@ def spinner(message: str) -> Generator[None, None, None]:
         sys.stdout.flush()
 
 
-def synch_user(api_session: APISession, db: sqlite3.Connection) -> tuple[str, str]:
+def synch_user(api_session: ClockifyClient, db: sqlite3.Connection) -> tuple[str, str]:
     """
     Fetches the User from the clockify API and inserts the User into the db.
     Returns the user id and workspace id
@@ -224,14 +178,14 @@ def synch_user(api_session: APISession, db: sqlite3.Connection) -> tuple[str, st
     return user["id"], user["activeWorkspace"] or user["defaultWorkspace"]
 
 
-def synch_workspaces(api_session: APISession, db: sqlite3.Connection) -> None:
+def synch_workspaces(api_session: ClockifyClient, db: sqlite3.Connection) -> None:
     workspaces = api_session.get_workspaces()
     workspaces_data = [(ws["id"], ws["name"]) for ws in workspaces]
     db.executemany("INSERT INTO workspace VALUES(?,?)", workspaces_data)
 
 
 def synch_time_entries(
-    api_session: APISession,
+    api_session: ClockifyClient,
     db: sqlite3.Connection,
     user_id: str,
     workspace_id: str,
@@ -264,19 +218,19 @@ def synch_time_entries(
     db.executemany("INSERT INTO time_entry VALUES(?,?,?,?,?,?,?)", time_entries_data)
 
 
-def synch(store: Store) -> int:
+def synch(store: Store, clockify_session: ClockifySession) -> int:
     fd, tmp_db = tempfile.mkstemp(dir=store.directory)
     os.close(fd)
     store.create_db(tmp_db)
 
     try:
         with (
-            clockify_session() as session,
             store.connect(tmp_db) as db,
             spinner("Synching..."),
         ):
-            api_session = APISession(APIServer(session))
-            user_id, workspace_id = synch_user(api_session, db)
+            client = ClockifyClient(clockify_session)
+
+            user_id, workspace_id = synch_user(client, db)
             if workspace_id is None or user_id is None:
                 print(
                     f"SYNCH FAILED: Invalid User ({user_id}) "
@@ -284,8 +238,9 @@ def synch(store: Store) -> int:
                 )
                 os.remove(tmp_db)
                 return 1
-            synch_workspaces(api_session, db)
-            synch_time_entries(api_session, db, user_id, workspace_id)
+
+            synch_workspaces(client, db)
+            synch_time_entries(client, db, user_id, workspace_id)
     except BaseException:
         os.remove(tmp_db)
         raise
@@ -315,14 +270,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     store = Store()
-
-    if args.command == "invoice":
-        if args.interactive_mode:
-            app.config["store"] = store
-            return run_interactive()
-        return generate_invoice(store)
-    elif args.command == "synch":
-        return synch(store)
+    with ClockifySession() as sess:
+        if args.command == "invoice":
+            if args.interactive_mode:
+                return run_interactive(store, sess.api_key)
+            return generate_invoice(store)
+        elif args.command == "synch":
+            return synch(store, sess)
     return 0
 
 

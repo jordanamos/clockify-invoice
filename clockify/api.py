@@ -1,76 +1,81 @@
 from __future__ import annotations
 
+import os
+from datetime import date
 from json.decoder import JSONDecodeError
 from typing import Any
 
-import requests
-
-from clockify.exceptions import ClockifyAPIException
+from requests import Session
 
 
-class APIServer:
-    api_base_endpoint = "https://api.clockify.me/api/v1"
+class ClockifySession(Session):
+    API_BASE_ENDPOINT = "https://api.clockify.me/api/v1"
 
-    def __init__(self, session: requests.Session) -> None:
-        self.session = session
-
-    def get(self, path: str, params: dict[str, str] = {}) -> Any:
-        url = self.api_base_endpoint + path
-
-        raw_response = self.session.get(
-            url,
-            params=params,
+    def __init__(self) -> None:
+        api_key = os.getenv("CLOCKIFY_API_KEY")
+        if api_key is None:
+            raise APIKeyMissingError(
+                "'CLOCKIFY_API_KEY' environment variable not set.\n"
+                "Connection to Clockify's API requires an API Key which can"
+                "be found in your user settings."
+            )
+        super().__init__()
+        self.api_key = api_key
+        self.headers.update(
+            {
+                "X-Api-key": api_key,
+                "content-type": "application/json",
+            }
         )
-        return APIResponse(raw_response).parse()
 
-
-# class User:
-#     def __init__(self, APISession) -> None:
-#         user = APISession.get("/user")
-#         self.user_id = user["id"]
-#         self.email = user["email"]
-#         self.active_workspace = user["activeWorkspace"]
-#         self.default_workspace = user["defaultWorkspace"]
-#         self.timezone = user["settings"]["timeZone"]
-
-
-class APIResponse:
-    def __init__(self, raw_response: requests.Response) -> None:
-        self.raw_response = raw_response
-
-    def parse(self) -> dict[str, Any]:
-        if self.raw_response.status_code in [200, 201]:
-            return self.parse_json()
-        else:
-            error_response = self.parse_json()
-            # msg = f"APIResponse Error [{error_response['code']}]
-            #  {error_response['message']}"
-            # TODO handle exceptions
-            raise Exception(error_response)
-
-    def parse_json(self) -> dict[str, Any]:
+    def get_clockify(self, endpoint: str, params: dict[str, str] = {}) -> Any:
+        """Performs a "GET" request to the clockify API. Returns the JSON response."""
+        url = f"{self.API_BASE_ENDPOINT}/{endpoint}"
+        response = self.get(url, params=params)
+        response.raise_for_status()
         try:
-            return self.raw_response.json()
+            return response.json()
         except JSONDecodeError:
-            msg = f"Unable to parse response as JSON: '{self.raw_response.text}'"
+            msg = f"Unable to parse response as JSON: '{response.text}'"
             raise APIResponseParseException(msg)
 
 
-class APIException(ClockifyAPIException):
-    """Base exception for this module."""
+class ClockifyClient:
+    CLOCKIFY_DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
+    def __init__(self, api: ClockifySession) -> None:
+        self.api = api
+
+    def get_user(self) -> dict[str, Any]:
+        return self.api.get_clockify("user")
+
+    def get_workspaces(self) -> list[dict[str, Any]]:
+        return self.api.get_clockify("workspaces")
+
+    def get_time_entries(
+        self,
+        workspace_id: str,
+        user_id: str,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> list[dict[str, Any]]:
+        path = f"/workspaces/{workspace_id}/user/{user_id}/time-entries"
+        params = {}
+        if start_date is not None:
+            params["start"] = start_date.strftime(self.CLOCKIFY_DATETIME_FORMAT)
+        if end_date is not None:
+            params["end"] = end_date.strftime(self.CLOCKIFY_DATETIME_FORMAT)
+
+        return self.api.get_clockify(path, params)
+
+
+class ClockifyAPIException(Exception):
     pass
 
 
-class APIServerException(APIException):
-    """An exception in the API server itself, communicated in response by the API"""
-
+class APIKeyMissingError(ClockifyAPIException):
     pass
 
 
-class APIKeyMissingError(APIException):
-    pass
-
-
-class APIResponseParseException(APIException):
+class APIResponseParseException(ClockifyAPIException):
     pass

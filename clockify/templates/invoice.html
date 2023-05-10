@@ -141,19 +141,41 @@
                 />
               </div>
               <div class="mb-2">
-                <label for="invoice-period" class="form-label">Period</label>
+                <label for="month" class="form-label">Month</label>
                 <select
                   class="form-select form-select-sm"
                   aria-label="form-select-sm"
-                  id="invoice-period"
-                  name="invoice-period"
-                  value=""
+                  id="month"
+                  name="month"
                   required
                 >
-                  <option {% if form_data['invoice-period'] == 'this-month' %} selected {% endif %}>This Month</option>
-                  <option value="last-month" {% if form_data['invoice-period'] == 'last-month' %} selected {% endif %}>Last Month</option>
-                  <option value="two-months-ago" {% if form_data['invoice-period'] == 'two-months-ago' %} selected {% endif %}>2 Months Ago</option>
-                  <option value="three-months-ago" {% if form_data['invoice-period'] == 'three-months-ago' %} selected {% endif %}>3 Months Ago</option>
+                {% for month in form_data['months'] %}
+                  <option
+                    value={{ loop.index}}
+                    {% if form_data['month']|int ==  loop.index  %} selected {% endif %}
+                  >
+                    {{ month }}
+                  </option>
+                {% endfor %}
+                </select>
+              </div>
+              <div class="mb-2">
+                <label for="year" class="form-label">Year</label>
+                <select
+                  class="form-select form-select-sm"
+                  aria-label="form-select-sm"
+                  id="year"
+                  name="year"
+                  required
+                >
+                {% for year in form_data['years'] %}
+                  <option
+                    value={{ year }}
+                    {% if form_data['year']|int == year %} selected {% endif %}
+                  >
+                    {{ year }}
+                  </option>
+                {% endfor %}
                 </select>
               </div>
               <div class="d-grid gap-2">
