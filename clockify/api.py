@@ -43,8 +43,12 @@ class ClockifySession:
         self, method: Literal["GET", "POST"], url: str
     ) -> http.client.HTTPResponse:
         self.connection.request(method, url, headers=self.headers)
-        response = self.connection.getresponse()
-        return response
+        res = self.connection.getresponse()
+        if res.status < 200 or res.status >= 300:
+            # The response status code indicates an error
+            error_msg = f"{res.status} {res.reason}:{res.read().decode()}"
+            raise http.client.HTTPException(error_msg)
+        return res
 
     def get(self, endpoint: str) -> Any:
         """Performs a GET request to the clockify API and returns the JSON response."""
