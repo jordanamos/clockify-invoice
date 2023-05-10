@@ -4,7 +4,6 @@ import os
 from datetime import date
 from json.decoder import JSONDecodeError
 from typing import Any
-
 from requests import Session
 
 
@@ -21,22 +20,24 @@ class ClockifySession(Session):
             )
         super().__init__()
         self.api_key = api_key
-        self.headers = {
-            "X-Api-key": api_key,
-            "content-type": "application/json",
-        }
+        self.headers.update(
+            {
+                "X-Api-key": api_key,
+                "content-type": "application/json",
+            }
+        )
 
     def get_clockify(self, endpoint: str, params: dict[str, str] | None = None) -> Any:
         """Performs a GET request to the clockify API and returns the JSON response."""
         url = f"{self.API_BASE_ENDPOINT}/{endpoint}"
-        response = self.get(url, headers=self.headers, params=params)
+        response = self.get(url, params=params)
+        print(response.request.headers)
         response.raise_for_status()
         try:
             return response.json()
         except JSONDecodeError:
             msg = f"Unable to parse response as JSON: '{response.text}'"
             raise APIResponseParseException(msg)
-
 
 class ClockifyClient:
     CLOCKIFY_DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
