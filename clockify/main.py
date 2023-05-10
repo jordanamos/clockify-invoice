@@ -236,13 +236,11 @@ def synch(store: Store) -> int:
 
             synch_workspaces(client, db)
             synch_time_entries(client, db, user_id, workspace_id)
-
+            os.replace(tmp_db, store.db_path)
     except BaseException:
         os.remove(tmp_db)
         raise
-    else:
-        os.replace(tmp_db, store.db_path)
-        return 0
+    return 0
 
 
 def main(argv: Sequence[str] | None = None) -> int:
