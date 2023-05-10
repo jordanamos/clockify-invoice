@@ -1,80 +1,100 @@
 from __future__ import annotations
 
+import http.client
+import json
+import os
 from json.decoder import JSONDecodeError
+from types import TracebackType
 from typing import Any
-
-import requests
-from exceptions import ClockifyAPIException
+from typing import Literal
 
 
-class APIServer:
-    api_base_endpoint = "https://api.clockify.me/api/v1"
+class ClockifySession:
+    API_BASE_ENDPOINT = "https://api.clockify.me/api/v1"
 
-    def __init__(self, api_key: str) -> None:
-        self.api_key = api_key
-        self.session = requests.Session()
-        self.session.headers = {
+    def __init__(self) -> None:
+        self.api_key = self.get_api_key()
+        self.connection = http.client.HTTPSConnection("api.clockify.me")
+        self.headers = {
             "X-Api-key": self.api_key,
             "content-type": "application/json",
+            "Connection": "keep-alive",
         }
 
-    def get(self, path: str, params: dict[str, str] = {}) -> dict[str, Any]:
-        url = self.api_base_endpoint + path
+    def __enter__(self) -> ClockifySession:
+        return self
 
-        raw_response = self.session.get(
-            url,
-            params=params,
-        )
-        return APIResponse(raw_response).parse()
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        exc_traceback: TracebackType | None,
+    ) -> None:
+        self.close()
 
+    @staticmethod
+    def get_api_key() -> str:
+        api_key = os.getenv("CLOCKIFY_API_KEY")
+        if api_key is None:
+            raise APIKeyMissingError(
+                "'CLOCKIFY_API_KEY' environment variable not set.\n"
+                "Connection to Clockify's API requires an API Key which can"
+                "be found in your user settings."
+            )
+        return api_key
 
-# class User:
-#     def __init__(self, APISession) -> None:
-#         user = APISession.get("/user")
-#         self.user_id = user["id"]
-#         self.email = user["email"]
-#         self.active_workspace = user["activeWorkspace"]
-#         self.default_workspace = user["defaultWorkspace"]
-#         self.timezone = user["settings"]["timeZone"]
+    def close(self) -> None:
+        self.connection.close()
 
+    def _request(
+        self, method: Literal["GET", "POST"], url: str
+    ) -> http.client.HTTPResponse:
+        self.connection.request(method, url, headers=self.headers)
+        res = self.connection.getresponse()
+        if res.status < 200 or res.status >= 300:
+            # The response status code indicates an error
+            error_msg = f"{res.status} {res.reason}:{res.read().decode()}"
+            raise http.client.HTTPException(error_msg)
+        return res
 
-class APIResponse:
-    def __init__(self, raw_response: requests.Response) -> None:
-        self.raw_response = raw_response
-
-    def parse(self) -> dict[str, Any]:
-        if self.raw_response.status_code in [200, 201]:
-            return self.parse_json()
-        else:
-            error_response = self.parse_json()
-            # msg = f"APIResponse Error [{error_response['code']}]
-            #  {error_response['message']}"
-            # TODO handle exceptions
-            raise Exception(error_response)
-
-    def parse_json(self) -> dict[str, Any]:
+    def get(self, endpoint: str) -> Any:
+        """Performs a GET request to the clockify API and returns the JSON response."""
+        url = f"{self.API_BASE_ENDPOINT}/{endpoint}"
+        response = self._request("GET", url)
+        data = response.read().decode()
         try:
-            return self.raw_response.json()
+            return json.loads(data)
         except JSONDecodeError:
-            msg = f"Unable to parse response as JSON: '{self.raw_response.text}'"
+            msg = f"Unable to parse response as JSON: '{data}'"
             raise APIResponseParseException(msg)
 
 
-class APIException(ClockifyAPIException):
-    """Base exception for this module."""
+class ClockifyClient:
+    def __init__(self, session: ClockifySession) -> None:
+        self.session = session
 
+    def get_user(self) -> dict[str, Any]:
+        return self.session.get("user")
+
+    def get_workspaces(self) -> list[dict[str, Any]]:
+        return self.session.get("workspaces")
+
+    def get_time_entries(
+        self,
+        workspace_id: str,
+        user_id: str,
+    ) -> list[dict[str, Any]]:
+        path = f"workspaces/{workspace_id}/user/{user_id}/time-entries"
+        return self.session.get(path)
+
+
+class ClockifyAPIException(Exception):
     pass
 
 
-class APIServerException(APIException):
-    """An exception in the API server itself, communicated in response by the API"""
-
+class APIKeyMissingError(Exception):
     pass
 
 
-class APIKeyMissingError(APIException):
-    pass
-
-
-class APIResponseParseException(APIException):
+class APIResponseParseException(Exception):
     pass

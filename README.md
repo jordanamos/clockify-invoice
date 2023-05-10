@@ -2,8 +2,4 @@
 
 Creates an invoice using clockify's API.
 
-Requirements
-
-sudo apt-get install wkhtmltopdf
-brew install --cask wkhtmltopdf
-https://github.com/JazzCore/python-pdfkit/wiki/Installing-wkhtmltopdf
+Requires a clockify API Key set as "CLOCKIFY_API_KEY" environment variable.

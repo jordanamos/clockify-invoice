@@ -34,7 +34,6 @@
         box-shadow: 0 0 10px rgba(0, 0, 0, 0.15);
         font-size: 16px;
         line-height: 24px;
-        font-family: "Helvetica Neue", "Helvetica", Helvetica, Arial, sans-serif;
         color: #555;
       }
 
@@ -117,61 +116,6 @@
   <body>
     <div class="container-lg">
       <div class="row">
-        <div class="col-md-2 col-lg-3 my-2">
-          <div
-            style="
-              border: 1px solid #eee;
-              box-shadow: 0 0 10px rgba(0, 0, 0, 0.15);
-              padding: 20px;
-            "
-          >
-            <form method="POST">
-              <input type="hidden" name="download" id="download" value="" />
-              <div class="mb-2">
-                <label for="invoice-number" class="form-label"
-                  >Invoice Number</label
-                >
-                <input
-                  type="text"
-                  class="form-control form-control-sm"
-                  id="invoice-number"
-                  placeholder="1234..."
-                  name="invoice-number"
-                  value="1"
-                  required
-                />
-              </div>
-              <div class="mb-2">
-                <label for="invoice-period" class="form-label">Period</label>
-                <select
-                  class="form-select form-select-sm"
-                  aria-label="form-select-sm"
-                  id="invoice-period"
-                  name="invoice-period"
-                  required
-                >
-                  <option selected>This Month</option>
-                  <option value="last-month">Last Month</option>
-                </select>
-              </div>
-              <div class="d-block d-grid-md">
-                <button class="btn btn-primary btn-sm" type="submit">
-                  Preview
-                </button>
-                <button
-                  class="btn btn-primary btn-sm"
-                  type="submit"
-                  onclick="document.getElementById('download').value = 1"
-                >
-                  Download
-                </button>
-                <button class="btn btn-primary btn-sm" type="submit" disabled>
-                  Email
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
         <div class="col">
           <div class="invoice-box">
             <table cellpadding="0" cellspacing="0">
@@ -181,9 +125,8 @@
                     <tr>
                       <td class="title">
                         <!-- <img src="https://www.sparksuite.com/images/logo.png" style="width: 100%; max-width: 300px" /> -->
-                        Jordan Amos
+                        Company Name
                       </td>
-
                       <td>
                         <b>Invoice #: 1</b><br />
                         Date: 24/10/2022
@@ -192,20 +135,19 @@
                   </table>
                 </td>
               </tr>
-
               <tr class="information">
                 <td colspan="5">
                   <table>
                     <tr>
                       <td>
-                        ABN: 47 436 539 044<br />
-                        jordan.amos@gmail.com
+                        ABN: 12 345 678 999<br />
+                        email@gmail.com
                       </td>
 
                       <td>
-                        John Scott<br />
-                        6 Cloud Systems<br />
-                        john.scott@6cloudsystems.com
+                        Payee Name<br />
+                        Payee Company<br />
+                        Payee Email
                       </td>
                     </tr>
                   </table>
@@ -235,16 +177,16 @@
 
 
               <tr class="item ">
-                <td></td>
-                <td>1878 HR History option for site change</td>
+                <td>1878</td>
+                <td>HR History option for site change</td>
                 <td>0.5</td>
                 <td>70.0</td>
                 <td>$35.0</td>
               </tr>
 
               <tr class="item last">
-                <td></td>
-                <td>1879 Safety remedial action team</td>
+                <td>1879</td>
+                <td>Safety remedial action team</td>
                 <td>0.25</td>
                 <td>70.0</td>
                 <td>$17.5</td>

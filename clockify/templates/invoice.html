@@ -141,26 +141,48 @@
                 />
               </div>
               <div class="mb-2">
-                <label for="invoice-period" class="form-label">Period</label>
+                <label for="month" class="form-label">Month</label>
                 <select
                   class="form-select form-select-sm"
                   aria-label="form-select-sm"
-                  id="invoice-period"
-                  name="invoice-period"
-                  value=""
+                  id="month"
+                  name="month"
                   required
                 >
-                  <option {% if form_data['invoice-period'] == 'this-month' %} selected {% endif %}>This Month</option>
-                  <option value="last-month" {% if form_data['invoice-period'] == 'last-month' %} selected {% endif %}>Last Month</option>
-                  <option value="two-months-ago" {% if form_data['invoice-period'] == 'two-months-ago' %} selected {% endif %}>2 Months Ago</option>
-                  <option value="three-months-ago" {% if form_data['invoice-period'] == 'three-months-ago' %} selected {% endif %}>3 Months Ago</option>
+                {% for month in form_data['months'] %}
+                  <option
+                    value={{ loop.index}}
+                    {% if form_data['month']|int ==  loop.index  %} selected {% endif %}
+                  >
+                    {{ month }}
+                  </option>
+                {% endfor %}
+                </select>
+              </div>
+              <div class="mb-2">
+                <label for="year" class="form-label">Year</label>
+                <select
+                  class="form-select form-select-sm"
+                  aria-label="form-select-sm"
+                  id="year"
+                  name="year"
+                  required
+                >
+                {% for year in form_data['years'] %}
+                  <option
+                    value={{ year }}
+                    {% if form_data['year']|int == year %} selected {% endif %}
+                  >
+                    {{ year }}
+                  </option>
+                {% endfor %}
                 </select>
               </div>
               <div class="d-grid gap-2">
                 <button class="btn btn-primary btn-sm" type="submit">
                   Preview
                 </button>
-                <a class="btn btn-success btn-sm" href="{{url_for('download')}}">
+                <a class="btn btn-success btn-sm" type="submit" href="{{url_for('download')}}">
                   Download
                 </a>
                 <button class="btn btn-secondary btn-sm" type="submit" disabled>
@@ -179,7 +201,7 @@
                     <tr>
                       <td class="title">
                         <!-- <img src="https://www.sparksuite.com/images/logo.png" style="width: 100%; max-width: 300px" /> -->
-                        {{invoice['company'].company_name}}
+                        {{invoice['company'].name}}
                       </td>
 
                       <td>
@@ -201,8 +223,8 @@
                       </td>
 
                       <td>
-                        {{invoice['client'].client_contact}}<br />
-                        {{invoice['client'].client_name}}<br />
+                        {{invoice['client'].contact}}<br />
+                        {{invoice['client'].name}}<br />
                         {{invoice['client'].email}}
                       </td>
                     </tr>
@@ -217,8 +239,8 @@
               <tr class="details">
                 <td colspan="4">
                   For the period:<br />
-                  {{invoice['start_date'] | format_date}} to
-                  {{invoice['end_date'] | format_date}}
+                  {{invoice['period_start'] | format_date}} to
+                  {{invoice['period_end'] | format_date}}
                 </td>
                 <td></td>
               </tr>
@@ -231,13 +253,13 @@
                 <td>Amount</td>
               </tr>
 
-              {% for line_item in invoice['_line_items'] %}
+              {% for time_entry in invoice['time_entries'] %}
               <tr class="item {% if loop.last %}last{% endif %}">
                 <td></td>
-                <td>{{invoice['_line_items'][line_item].description}}</td>
-                <td>{{invoice['_line_items'][line_item].time_spent_frac}}</td>
-                <td>{{invoice['_line_items'][line_item].rate}}</td>
-                <td>${{invoice['_line_items'][line_item].amount}}</td>
+                <td>{{time_entry.description}}</td>
+                <td>{{time_entry.duration_hours}}</td>
+                <td>{{time_entry.rate}}</td>
+                <td>${{time_entry.duration_hours * time_entry.rate}}</td>
               </tr>
               {% endfor %}
 
@@ -246,7 +268,7 @@
                 <td></td>
                 <td></td>
                 <td></td>
-                <td>Total: ${{invoice['_total']}}</td>
+                <td>Total: ${{invoice['total']}}</td>
               </tr>
             </table>
           </div>

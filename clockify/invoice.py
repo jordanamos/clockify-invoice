@@ -1,131 +1,158 @@
-import json
 from datetime import date
+from datetime import datetime
 from typing import Any
+from typing import NamedTuple
 
-import pandas as pd
-from api import APIServer
-from client import APISession
-from requests import Session
+import tabulate
+from flask import render_template
+from weasyprint import HTML
+
+from clockify.store import Store
+
+TIME_ENTRIES_QUERY = """\
+SELECT MAX(end_time) AS date
+    , description
+    , SUM(duration_seconds)
+FROM time_entry
+WHERE user = ?
+    AND workspace = ?
+    AND start_time >= ?
+    AND end_time < ?
+    AND duration_seconds > 0
+GROUP BY description
+"""
+
+
+class TimeEntry(NamedTuple):
+    date: datetime
+    description: str
+    duration_hours: float
+    rate: float
+
+    @property
+    def billable_amount(self) -> float:
+        return self.duration_hours * self.rate
 
 
 class Invoice:
     """
     A Class representation of an Invoice with clockify line items
-
     """
-
-    # TODO handle timezones
-    date_display_format = "%d/%m/%Y"
 
     def __init__(
         self,
-        APISession: APISession,
+        store: Store,
         invoice_number: str,
         company_name: str,
         client_name: str,
-        start_date: date,
-        end_date: date,
-    ):
-        self.invoice_date = date.today()
+        period_start: date,
+        period_end: date,
+        invoice_date: date = date.today(),
+    ) -> None:
+        self.store = store
+        self.invoice_date = invoice_date
         self.invoice_number = invoice_number
-        self.session = APISession
         self.company = Company(company_name)
         self.client = Client(client_name)
-        self.start_date = start_date
-        self.end_date = end_date
-        self._line_items = self.line_items.to_dict(orient="index")
-        self._total = self.total
+        self.period_start = period_start
+        self.period_end = period_end
+
+        self.update_time_entries()
 
     @property
-    def line_items(self) -> pd.DataFrame:
-        # TODO add params for end date <= self.end_date for ?improved?
-        # performance with historic requests
-        time_entries = self.session.get_time_entries()
-        return self.get_billable_items(time_entries)
+    def time_entries(self) -> list[TimeEntry]:
+        return self._time_entries
+
+    @property
+    def invoice_name(self) -> str:
+        return (
+            f"{self.invoice_date.strftime('%Y_%m')}_Invoice_{self.invoice_number}.pdf"
+        )
+
+    def update_time_entries(self) -> None:
+        with self.store.connect() as db:
+            rows = db.execute(
+                TIME_ENTRIES_QUERY,
+                (
+                    self.store.get_user_id(),
+                    self.store.get_workspace_id(),
+                    self.period_start,
+                    self.period_end,
+                ),
+            ).fetchall()
+
+        entries: list[TimeEntry] = []
+
+        for row in rows:
+            date = datetime.strptime(row[0], "%Y-%m-%d %H:%M:%S")
+            description = str(row[1])
+            duration_seconds = int(row[2])
+            duration_hours = (round((duration_seconds / 3600) * 4) / 4) or 0.25
+            time_entry = TimeEntry(date, description, duration_hours, 70.0)
+            entries.append(time_entry)
+        self._time_entries = entries
 
     @property
     def total(self) -> float:
-        return self.line_items["amount"].sum()
+        return sum(entry.billable_amount for entry in self.time_entries)
 
-    def get_billable_items(self, time_entries: dict[str, Any]) -> pd.DataFrame:
-        # pd.options.display.float_format = "{:,.2f}".format
+    def html(self, **kwargs: dict[str, Any]) -> str:
+        """Render the invoice html"""
+        return render_template("invoice.html", invoice=self.to_dict(), **kwargs)
 
-        df = pd.json_normalize(time_entries)
-        # filter rows to billable only
-        df[df.billable]
-        df[["description", "timeInterval.end", "timeInterval.duration"]]
-        df.rename(
-            columns={
-                "timeInterval.end": "item_date",
-                "timeInterval.duration": "time_spent",
-            },
-            inplace=True,
-        )
+    def pdf(self, **kwargs: dict[str, Any]) -> bytes:
+        html = HTML(string=self.html(**kwargs))
+        ret = html.write_pdf(target=None)
+        if not ret:
+            raise ValueError("Error generating invoice pdf")
+        return ret
 
-        # convert item date to date
-        df["item_date"] = pd.to_datetime(
-            df["item_date"], format=self.session.clockify_datetime_format
-        ).dt.date
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "invoice_number": self.invoice_number,
+            "invoice_date": self.invoice_date,
+            "company": self.company.__dict__,
+            "client": self.client.__dict__,
+            "period_start": self.period_start,
+            "period_end": self.period_end,
+            "time_entries": [entry._asdict() for entry in self.time_entries],
+            "total": self.total,
+        }
 
-        # convert time spent to time delta
-        df["time_spent"] = pd.to_timedelta(df["time_spent"])
-
-        # group items together, getting the max item date
-        # (the date the item was complete)
-        # and the sum of time taken (what we will use to bill)
-        df = df.groupby("description").agg({"item_date": "max", "time_spent": "sum"})
-        df = df.loc[
-            (df["item_date"] >= self.start_date) & (df["item_date"] <= self.end_date)
+    def __str__(self) -> str:
+        table_data = [
+            (
+                datetime.strftime(entry.date, "%d/%m/%Y"),
+                entry.description,
+                entry.duration_hours,
+                entry.rate,
+                entry.billable_amount,
+            )
+            for entry in self.time_entries
         ]
-
-        # round the time spent to the nearest 15mins.
-        # if nearest is 0, set to 15mins. (nothing is for free!)
-        df["time_spent"] = df["time_spent"].dt.round("15min")
-        df.loc[df["time_spent"] == pd.Timedelta(0), "time_spent"] = pd.Timedelta(
-            15, "m"
+        headers = ["Date", "Description", "Time Spent", "Rate", "Amount"]
+        table_str = tabulate.tabulate(table_data, headers=headers)
+        return (
+            f"Invoice #: {self.invoice_number}\n"
+            f"Invoice Date: {self.invoice_date}:\n"
+            f"Payee: {self.company.name}\n"
+            f"Payer: {self.client.name}\n"
+            f"Invoice Period: {self.period_start} to {self.period_end}\n\n"
+            f"{table_str}\n\n"
+            f"Total: {self.total}\n"
         )
-
-        # generate additional invoicing related columns
-        df["time_spent_frac"] = df["time_spent"] / pd.Timedelta(1, "h")
-        df["rate"] = self.company.rate
-        df["amount"] = df["time_spent_frac"] * df["rate"]
-
-        df = df.drop(columns=["time_spent", "item_date"])
-        df.reset_index(inplace=True)
-
-        return df
-
-    def convert_data(self, o: Any) -> Any:
-        if isinstance(o, date):
-            return o.strftime("%d/%m/%Y")
-        elif isinstance(o, (Client, Company)):
-            return o.__dict__
-        elif isinstance(o, (APISession, APIServer, Session)):
-            return str(o)
-        else:
-            json.JSONEncoder.default(self, o)
-
-    def to_json(self) -> str:
-        return json.dumps(
-            self.__dict__, default=self.convert_data, sort_keys=True, indent=4
-        )
-
-    # def __dict__(self):
-    #     return {
-    #         "invoice_number": self.invoice_number
-    #     }
 
 
 class Company:
-    def __init__(self, company_name: str):
-        self.company_name = company_name
+    def __init__(self, name: str):
+        self.name = name
         self.email = "jordan.amos@gmail.com"
         self.abn = "47 436 539 044"
         self.rate = 70.00
 
 
 class Client:
-    def __init__(self, client_name: str):
-        self.client_name = client_name
-        self.client_contact = "John Scott"
+    def __init__(self, name: str):
+        self.name = name
+        self.contact = "John Scott"
         self.email = "john.scott@6cloudsystems.com"
