@@ -1,17 +1,11 @@
 import argparse
 import calendar as cal
-import contextlib
 import io
-import itertools
 import logging
 import os
 import pickle
 import sqlite3
-import sys
 import tempfile
-import threading
-import time
-from collections.abc import Generator
 from collections.abc import Sequence
 from datetime import date
 from datetime import datetime
@@ -143,6 +137,7 @@ def generate_invoice(
 
     return 0
 
+
 def synch_user(api_session: ClockifyClient, db: sqlite3.Connection) -> tuple[str, str]:
     """
     Fetches the User from the clockify API and inserts the User into the db.
@@ -217,7 +212,9 @@ def synch(store: Store) -> int:
             ClockifySession() as session,
             store.connect(tmp_db) as db,
         ):
-            logger.info("Synching the local db with clockify. This will only take a moment...")
+            logger.info(
+                "Synching the local db with clockify. This will only take a moment..."
+            )
             client = ClockifyClient(session)
 
             user_id, workspace_id = synch_user(client, db)
