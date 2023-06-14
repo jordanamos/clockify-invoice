@@ -1,20 +1,15 @@
 import argparse
 import calendar as cal
-import contextlib
 import io
-import itertools
 import logging
 import os
 import pickle
 import sqlite3
-import sys
 import tempfile
-import threading
-import time
-from collections.abc import Generator
 from collections.abc import Sequence
 from datetime import date
 from datetime import datetime
+from datetime import timezone
 from typing import Any
 from typing import Literal
 
@@ -29,6 +24,11 @@ from clockify.api import ClockifyClient
 from clockify.api import ClockifySession
 from clockify.invoice import Invoice
 from clockify.store import Store
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(levelname)s] %(message)s",
+)
 
 logger = logging.getLogger(__name__)
 app = Flask(__name__)
@@ -71,8 +71,7 @@ def process_invoice() -> str:
         form_data.update(request.form)
 
     year, month = int(form_data["year"]), int(form_data["month"])
-    _, days_in_month = cal.monthrange(year, month)
-    period_start, period_end = date(year, month, 1), date(year, month, days_in_month)
+    period_start, period_end = date(year, month, 1), date(year, month + 1, 1)
 
     invoice_number = form_data["invoice-number"]
 
@@ -113,8 +112,8 @@ def generate_invoice(
     workspace_id = store.get_workspace_id()
     user_id = store.get_user_id()
     if not (workspace_id and user_id):
-        print(
-            f"ERROR generating invoice: Invalid User ({user_id}) or "
+        logger.error(
+            f"Unable to generate invoice: Invalid User ({user_id}) or "
             f"Workspace ({workspace_id})"
         )
         return 1
@@ -123,8 +122,7 @@ def generate_invoice(
     invoice_company = "Jordan Amos"
     invoice_client = "6 Cloud Systems"
 
-    _weekdays, days_in_month = cal.monthrange(year, month)
-    period_start, period_end = date(year, month, 1), date(year, month, days_in_month)
+    period_start, period_end = date(year, month, 1), date(year, month + 1, 1)
 
     invoice = Invoice(
         store,
@@ -140,30 +138,6 @@ def generate_invoice(
     return 0
 
 
-@contextlib.contextmanager
-def spinner(message: str) -> Generator[None, None, None]:
-    def spin() -> None:
-        while running:
-            sys.stdout.write(f"{next(spin_cycle)} {message}\r")
-            sys.stdout.flush()
-            time.sleep(0.1)
-            sys.stdout.write(clear)
-            sys.stdout.flush()
-
-    spin_cycle = itertools.cycle(["-", "\\", "|", "/"])
-    clear = f"\r{' ' * (len(message) + 2)}\r"
-    running = True
-    thread = threading.Thread(target=spin)
-    try:
-        thread.start()
-        yield
-    finally:
-        running = False
-        thread.join()
-        sys.stdout.write(clear)
-        sys.stdout.flush()
-
-
 def synch_user(api_session: ClockifyClient, db: sqlite3.Connection) -> tuple[str, str]:
     """
     Fetches the User from the clockify API and inserts the User into the db.
@@ -176,8 +150,9 @@ def synch_user(api_session: ClockifyClient, db: sqlite3.Connection) -> tuple[str
         user["email"],
         user["defaultWorkspace"],
         user["activeWorkspace"],
+        user["settings"]["timeZone"],
     )
-    db.execute("INSERT INTO user VALUES(?,?,?,?,?)", user_table_data)
+    db.execute("INSERT INTO user VALUES(?,?,?,?,?,?)", user_table_data)
     return user["id"], user["activeWorkspace"] or user["defaultWorkspace"]
 
 
@@ -197,18 +172,33 @@ def synch_time_entries(
     clockify_date_format = "%Y-%m-%dT%H:%M:%SZ"
     data = []
 
+    def _convert_datestr(datestr: str) -> datetime:
+        return (
+            datetime.strptime(datestr, clockify_date_format)
+            .replace(tzinfo=timezone.utc)
+            .astimezone(tz=None)
+        )
+
     for te in time_entries:
         entry_id = te["id"]
-        start_time = datetime.strptime(
-            te["timeInterval"]["start"], clockify_date_format
-        )
-        end_time = datetime.strptime(te["timeInterval"]["end"], clockify_date_format)
+        start_time = _convert_datestr(te["timeInterval"]["start"])
+        start_time_formatted = datetime.strftime(start_time, "%Y-%m-%d %H:%M:%S")
+        end_time = _convert_datestr(te["timeInterval"]["end"])
+        end_time_formatted = datetime.strftime(end_time, "%Y-%m-%d %H:%M:%S")
+
         duration_secs = (end_time - start_time).total_seconds()
         desc = te["description"]
         data.append(
-            (entry_id, start_time, end_time, duration_secs, desc, user_id, workspace_id)
+            (
+                entry_id,
+                start_time_formatted,
+                end_time_formatted,
+                duration_secs,
+                desc,
+                user_id,
+                workspace_id,
+            )
         )
-
     db.executemany("INSERT INTO time_entry VALUES(?,?,?,?,?,?,?)", data)
 
 
@@ -221,8 +211,10 @@ def synch(store: Store) -> int:
         with (
             ClockifySession() as session,
             store.connect(tmp_db) as db,
-            spinner("Synching..."),
         ):
+            logger.info(
+                "Synching the local db with clockify. This will only take a moment..."
+            )
             client = ClockifyClient(session)
 
             user_id, workspace_id = synch_user(client, db)

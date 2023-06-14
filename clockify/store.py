@@ -33,6 +33,7 @@ class Store:
                     email TEXT,
                     default_workspace TEXT,
                     active_workspace TEXT,
+                    time_zone TEXT,
                     FOREIGN KEY (default_workspace) REFERENCES workspace(id),
                     FOREIGN KEY (active_workspace) REFERENCES workspace(id)
                 );
