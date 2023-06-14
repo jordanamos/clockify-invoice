@@ -118,8 +118,8 @@ def generate_invoice(
     workspace_id = store.get_workspace_id()
     user_id = store.get_user_id()
     if not (workspace_id and user_id):
-        print(
-            f"ERROR generating invoice: Invalid User ({user_id}) or "
+        logger.error(
+            f"Unable to generate invoice: Invalid User ({user_id}) or "
             f"Workspace ({workspace_id})"
         )
         return 1
