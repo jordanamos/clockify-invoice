@@ -99,10 +99,10 @@ def process_invoice() -> str:
     return invoice.html(form_data=form_data)
 
 
-def run_interactive(store: Store) -> int:
+def run_interactive(store: Store, port: int) -> int:
     app.config["store"] = store
     app.secret_key = ClockifySession.get_api_key()
-    app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)
+    app.run(host="0.0.0.0", port=port, debug=True, use_reloader=False)
     return 0
 
 
@@ -250,6 +250,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Run a local server to create invoices interactively in the browser",
     )
     parser.add_argument(
+        "--port",
+        "-p",
+        type=int,
+        default=5000,
+        help=(
+            "Set the port to use when running in interactive mode."
+            " Default is %(default)s"
+        ),
+    )
+    parser.add_argument(
         "--year",
         type=int,
         default=today.year,
@@ -272,8 +282,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.synch:
         ret |= synch(store)
-    if args.interactive_mode:
-        ret |= run_interactive(store)
+    elif args.interactive_mode:
+        ret |= run_interactive(store, args.port)
     else:
         ret |= generate_invoice(store, args.year, args.month)
 
