@@ -66,7 +66,7 @@ class Invoice:
     @property
     def invoice_name(self) -> str:
         return (
-            f"{self.invoice_date.strftime('%Y_%m')}_Invoice_{self.invoice_number}.pdf"
+            f"{self.period_start.strftime('%Y_%m')}_Invoice_{self.invoice_number}.pdf"
         )
 
     def update_time_entries(self) -> None:

@@ -274,10 +274,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         choices=range(1, 13),
         help="Set the invoice period month. Default is the current month (%(default)s)",
     )
+
     args = parser.parse_args(argv)
-
+    
     store = Store()
-
     ret = 0
 
     if args.synch:
