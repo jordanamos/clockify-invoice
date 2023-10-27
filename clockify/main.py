@@ -1,4 +1,5 @@
 import argparse
+import base64
 import calendar as cal
 import io
 import logging
@@ -48,10 +49,28 @@ def format_date(value: date, format: str = "%d/%m/%Y") -> str:
 def download() -> werkzeug.wrappers.Response:
     if "invoice" not in session:
         return redirect("/")
-
     invoice: Invoice = pickle.loads(session["invoice"])
+    pdf_bytes = invoice.pdf(form_data={"display-form": "none"})
+    store: Store = app.config["store"]
+    invoice_data = (
+        invoice.invoice_number,
+        invoice.invoice_date,
+        invoice.period_start,
+        invoice.period_end,
+        invoice.company.name,
+        invoice.client.name,
+        invoice.total,
+        0,
+        base64.b64encode(pdf_bytes).decode(),
+    )
+    with store.connect() as db:
+        cols = "number, date, period_start, period_end, payer, payee, total, paid, pdf"
+        db.execute(
+            f"INSERT INTO invoice({cols}) VALUES(?,?,?,?,?,?,?,?,?)",
+            invoice_data,
+        )
     return send_file(
-        io.BytesIO(invoice.pdf(form_data={"display-form": "none"})),
+        io.BytesIO(pdf_bytes),
         mimetype="application/pdf",
         as_attachment=True,
         download_name=invoice.invoice_name,  # type: ignore
@@ -62,12 +81,12 @@ def download() -> werkzeug.wrappers.Response:
 def process_invoice() -> str:
     today = date.today()
     years = list(range(today.year, today.year - 5, -1))
-
+    store: Store = app.config["store"]
     form_data: dict[str, Any] = {
         "months": list(cal.month_name[1:]),
         "years": years,
         "display-form": "block",
-        "invoice-number": "1",
+        "invoice-number": store.get_next_invoice_number(),
         "month": today.month,
         "year": today.year,
     }
@@ -78,7 +97,7 @@ def process_invoice() -> str:
     year, month = int(form_data["year"]), int(form_data["month"])
     period_start, period_end = date(year, month, 1), date(year, month + 1, 1)
 
-    invoice_number = form_data["invoice-number"]
+    invoice_number = int(form_data["invoice-number"])
 
     if "invoice" in session:
         invoice: Invoice = pickle.loads(session["invoice"])
@@ -87,7 +106,6 @@ def process_invoice() -> str:
         invoice.period_end = period_end
         invoice.update_time_entries()
     else:
-        store: Store = app.config["store"]
         invoice_company = "Jordan Amos"
         invoice_client = "6 Cloud Systems"
         invoice = Invoice(
@@ -98,6 +116,7 @@ def process_invoice() -> str:
             period_start,
             period_end,
         )
+        invoice.update_time_entries()
 
     session["invoice"] = pickle.dumps(invoice)
 
@@ -134,7 +153,7 @@ def generate_invoice(
         )
         return 1
 
-    invoice_number = "1"
+    invoice_number = store.get_next_invoice_number()
     invoice_company = "Jordan Amos"
     invoice_client = "6 Cloud Systems"
 
@@ -148,6 +167,7 @@ def generate_invoice(
         period_start,
         period_end,
     )
+    invoice.update_time_entries()
 
     print(invoice)
 

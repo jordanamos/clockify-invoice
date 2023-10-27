@@ -113,11 +113,10 @@
       }
     </style>
   </head>
-
   <body>
     <div class="container-lg">
       <div class="row">
-        <div class="col-md-3 my-2" style="display:{{form_data['display-form']}};">
+        <div class="col-md-3 my-3" id="side-container" style="display:{{form_data['display-form']}};">
           <div
             style="
               border: 1px solid #eee;
@@ -125,71 +124,112 @@
               padding: 20px;
             "
           >
-            <form method="POST">
-              <div class="mb-2">
-                <label for="invoice-number" class="form-label"
-                  >Invoice Number</label
-                >
-                <input
-                  type="text"
-                  class="form-control form-control-sm"
-                  id="invoice-number"
-                  placeholder="1234..."
-                  name="invoice-number"
-                  value="{{form_data['invoice-number']}}"
-                  required
-                />
-              </div>
-              <div class="mb-2">
-                <label for="month" class="form-label">Month</label>
-                <select
-                  class="form-select form-select-sm"
-                  aria-label="form-select-sm"
-                  id="month"
-                  name="month"
-                  required
-                >
-                {% for month in form_data['months'] %}
-                  <option
-                    value={{ loop.index}}
-                    {% if form_data['month']|int ==  loop.index  %} selected {% endif %}
+          <script>
+            function toggle() {
+              var form_div = document.getElementById("invoice-form");
+              var table_div = document.getElementById("invoice-table");
+              if (form_div.style.display === "none") {
+                form_div.style.display = "block";
+                table_div.style.display = "none";
+              } else {
+                form_div.style.display = "none";
+                table_div.style.display = "block";
+              }
+            }
+          </script>
+          <a href="javascript:toggle();"><svg style="display: block; margin: auto;"xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-list-task" viewBox="0 0 16 16">
+            <path fill-rule="evenodd" d="M2 2.5a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h1a.5.5 0 0 0 .5-.5V3a.5.5 0 0 0-.5-.5H2zM3 3H2v1h1V3z"/>
+            <path d="M5 3.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5zM5.5 7a.5.5 0 0 0 0 1h9a.5.5 0 0 0 0-1h-9zm0 4a.5.5 0 0 0 0 1h9a.5.5 0 0 0 0-1h-9z"/>
+            <path fill-rule="evenodd" d="M1.5 7a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5H2a.5.5 0 0 1-.5-.5V7zM2 7h1v1H2V7zm0 3.5a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h1a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5H2zm1 .5H2v1h1v-1z"/>
+          </svg></a>
+            <div id="invoice-form" style="display: block;">
+              <form method="POST">
+                <div class="mb-2">
+                  <label for="invoice-number" class="form-label">Invoice Number</label>
+                  <input
+                    type="number"
+                    class="form-control form-control-sm"
+                    step="1"
+                    id="invoice-number"
+                    placeholder="1234..."
+                    name="invoice-number"
+                    value="{{form_data['invoice-number']}}"
+                    required
+                  />
+                </div>
+                <div class="mb-2">
+                  <label for="month" class="form-label">Period Month</label>
+                  <select
+                    class="form-select form-select-sm"
+                    aria-label="form-select-sm"
+                    id="month"
+                    name="month"
+                    required
                   >
-                    {{ month }}
-                  </option>
-                {% endfor %}
-                </select>
-              </div>
-              <div class="mb-2">
-                <label for="year" class="form-label">Year</label>
-                <select
-                  class="form-select form-select-sm"
-                  aria-label="form-select-sm"
-                  id="year"
-                  name="year"
-                  required
-                >
-                {% for year in form_data['years'] %}
-                  <option
-                    value={{ year }}
-                    {% if form_data['year']|int == year %} selected {% endif %}
+                  {% for month in form_data['months'] %}
+                    <option
+                      value={{ loop.index}}
+                      {% if form_data['month']|int ==  loop.index  %} selected {% endif %}
+                    >
+                      {{ month }}
+                    </option>
+                  {% endfor %}
+                  </select>
+                </div>
+                <div class="mb-2">
+                  <label for="year" class="form-label">Period Year</label>
+                  <select
+                    class="form-select form-select-sm"
+                    aria-label="form-select-sm"
+                    id="year"
+                    name="year"
+                    required
                   >
-                    {{ year }}
-                  </option>
-                {% endfor %}
-                </select>
-              </div>
-              <div class="d-grid gap-2">
-                <button class="btn btn-primary btn-sm" type="submit">
-                  Preview
-                </button>
-                <a class="btn btn-success btn-sm" type="submit" href="{{url_for('download')}}">
-                  Download
-                </a>
-                <button class="btn btn-secondary btn-sm" type="submit" disabled>
-                  Email
-                </button>
-              </div>
-            </form>
+                  {% for year in form_data['years'] %}
+                    <option
+                      value={{ year }}
+                      {% if form_data['year']|int == year %} selected {% endif %}
+                    >
+                      {{ year }}
+                    </option>
+                  {% endfor %}
+                  </select>
+                </div>
+                <div class="d-grid gap-2">
+                  <button class="btn btn-primary btn-sm" type="submit">
+                    Preview
+                  </button>
+                  <a class="btn btn-success btn-sm" type="submit" href="{{url_for('download')}}">
+                    Download
+                  </a>
+                  <button class="btn btn-secondary btn-sm" type="submit" disabled>
+                    Email
+                  </button>
+                </div>
+              </form>
+            </div>
+            <div id="invoice-table" style="display: none;">
+              <table class="table table-sm">
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th>Date</th>
+                    <th>Number</th>
+                    <th>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for invoice in invoices %}
+                    <tr>
+                      <td></td>
+                      <td>{{invoice.date}}</td>
+                      <td>{{invoice.number}}</td>
+                      <td>{{invoice.total}}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
         <div class="col my-2">
@@ -203,7 +243,6 @@
                         <!-- <img src="https://www.sparksuite.com/images/logo.png" style="width: 100%; max-width: 300px" /> -->
                         {{invoice['company'].name}}
                       </td>
-
                       <td>
                         <b>Invoice #: {{invoice['invoice_number']}}</b><br />
                         Date: {{invoice['invoice_date'] | format_date}}
@@ -212,7 +251,6 @@
                   </table>
                 </td>
               </tr>
-
               <tr class="information">
                 <td colspan="5">
                   <table>
@@ -231,11 +269,6 @@
                   </table>
                 </td>
               </tr>
-
-              <!-- <tr class="heading">
-              <td colspan="4">For the period</td>
-                        <td></td>
-            </tr> -->
               <tr class="details">
                 <td colspan="4">
                   For the period:<br />
@@ -244,7 +277,6 @@
                 </td>
                 <td></td>
               </tr>
-
               <tr class="heading">
                 <td>Item</td>
                 <td>Description</td>

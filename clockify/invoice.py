@@ -42,7 +42,7 @@ class Invoice:
     def __init__(
         self,
         store: Store,
-        invoice_number: str,
+        invoice_number: int,
         company_name: str,
         client_name: str,
         period_start: date,
@@ -56,8 +56,7 @@ class Invoice:
         self.client = Client(client_name)
         self.period_start = period_start
         self.period_end = period_end
-
-        self.update_time_entries()
+        self._time_entries: list[TimeEntry] = []
 
     @property
     def time_entries(self) -> list[TimeEntry]:

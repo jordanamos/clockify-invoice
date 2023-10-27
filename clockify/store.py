@@ -8,13 +8,10 @@ class Store:
     def __init__(self) -> None:
         self.directory = self._get_default_directory()
         self.db_path = os.path.join(self.directory, "db.db")
-
         self._workspace_id = None
         self._user_id = None
-
         if not os.path.exists(self.directory):
             os.makedirs(self.directory, exist_ok=True)
-
         self.create_db()
 
     def create_db(self, db_path: str | None = None) -> None:
@@ -50,12 +47,15 @@ class Store:
                 );
 
                 CREATE TABLE IF NOT EXISTS invoice (
-                    id TEXT PRIMARY KEY,
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
                     number INT,
                     date TEXT,
+                    period_start TEXT,
+                    period_end TEXT,
                     payer TEXT,
                     payee TEXT,
                     total REAL,
+                    paid INT,
                     pdf TEXT
                 );
                 """
