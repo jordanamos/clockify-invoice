@@ -4,6 +4,7 @@ import io
 import logging
 import os
 import pickle
+import shutil
 import sqlite3
 import tempfile
 from collections.abc import Sequence
@@ -32,6 +33,10 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 app = Flask(__name__)
+
+
+class APIKeyMissingError(Exception):
+    pass
 
 
 @app.template_filter("format_date")
@@ -99,9 +104,20 @@ def process_invoice() -> str:
     return invoice.html(form_data=form_data)
 
 
+def get_api_key() -> str:
+    api_key = os.getenv("CLOCKIFY_API_KEY")
+    if api_key is None:
+        raise APIKeyMissingError(
+            "'CLOCKIFY_API_KEY' environment variable not set.\n"
+            "Connection to Clockify's API requires an API Key which can"
+            "be found in your user settings."
+        )
+    return api_key
+
+
 def run_interactive(store: Store, port: int) -> int:
     app.config["store"] = store
-    app.secret_key = ClockifySession.get_api_key()
+    app.secret_key = get_api_key()
     app.run(host="0.0.0.0", port=port, debug=True, use_reloader=False)
     return 0
 
@@ -144,16 +160,26 @@ def synch_user(api_session: ClockifyClient, db: sqlite3.Connection) -> tuple[str
     Returns the user id and workspace id
     """
     user = api_session.get_user()
+    user_id = user["id"]
+    active_workspace = user["activeWorkspace"]
+    default_workspace = user["defaultWorkspace"]
+    workspace = active_workspace or default_workspace
     user_table_data = (
-        user["id"],
+        user_id,
         user["name"],
         user["email"],
-        user["defaultWorkspace"],
-        user["activeWorkspace"],
+        default_workspace,
+        active_workspace,
         user["settings"]["timeZone"],
     )
+
+    if not user_id:
+        raise ValueError(f"SYNCH FAILED: Invalid User {user_id}")
+    if not workspace:
+        raise ValueError("SYNCH FAILED: Unable to fetch Workspace")
+
     db.execute("INSERT INTO user VALUES(?,?,?,?,?,?)", user_table_data)
-    return user["id"], user["activeWorkspace"] or user["defaultWorkspace"]
+    return user_id, workspace
 
 
 def synch_workspaces(api_session: ClockifyClient, db: sqlite3.Connection) -> None:
@@ -185,7 +211,6 @@ def synch_time_entries(
         start_time_formatted = datetime.strftime(start_time, "%Y-%m-%d %H:%M:%S")
         end_time = _convert_datestr(te["timeInterval"]["end"])
         end_time_formatted = datetime.strftime(end_time, "%Y-%m-%d %H:%M:%S")
-
         duration_secs = (end_time - start_time).total_seconds()
         desc = te["description"]
         data.append(
@@ -203,68 +228,58 @@ def synch_time_entries(
 
 
 def synch(store: Store) -> int:
-    fd, tmp_db = tempfile.mkstemp(dir=store.directory)
+    # Create a back up of the db
+    fd, backup_db = tempfile.mkstemp(dir=store.directory)
     os.close(fd)
-    store.create_db(tmp_db)
-
+    shutil.copy(store.db_path, backup_db)
     try:
+        store.clear_clockify_tables()
         with (
-            ClockifySession() as session,
-            store.connect(tmp_db) as db,
+            ClockifySession(get_api_key()) as session,
+            store.connect() as db,
         ):
-            logger.info(
-                "Synching the local db with clockify. This will only take a moment..."
-            )
+            logger.info("Synching the local db with clockify...")
             client = ClockifyClient(session)
-
             user_id, workspace_id = synch_user(client, db)
-            if workspace_id is None or user_id is None:
-                logger.error(
-                    f"SYNCH FAILED: Invalid User ({user_id}) "
-                    f"or Workspace ({workspace_id})"
-                )
-                os.remove(tmp_db)
-                return 1
-
             synch_workspaces(client, db)
             synch_time_entries(client, db, user_id, workspace_id)
-            os.replace(tmp_db, store.db_path)
-    except BaseException:
-        os.remove(tmp_db)
+    except (KeyboardInterrupt, Exception):
+        # Something bad happened restore the db backup
+        os.replace(backup_db, store.db_path)
         raise
+    else:
+        os.remove(backup_db)
     return 0
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     today = date.today()
+
     parser = argparse.ArgumentParser(description="Clockify Invoice Command Line Tool")
     parser.add_argument(
         "--synch",
-        help="Synch the local db with clockify",
+        help="synch the local db with clockify",
         action="store_true",
     )
     parser.add_argument(
         "-i",
         action="store_true",
         dest="interactive_mode",
-        help="Run a local server to create invoices interactively in the browser",
+        help="run a local server to create invoices interactively in the browser",
     )
     parser.add_argument(
         "--port",
         "-p",
         type=int,
         default=5000,
-        help=(
-            "Set the port to use when running in interactive mode."
-            " Default is %(default)s"
-        ),
+        help=("(%(default)s) set the port to use when running in interactive mode."),
     )
     parser.add_argument(
         "--year",
         type=int,
         default=today.year,
         metavar="INT",
-        help="Set the invoice period year. Default is the current year (%(default)s)",
+        help="(%(default)s) set the invoice period year.",
     )
     parser.add_argument(
         "--month",
@@ -272,21 +287,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=today.month,
         metavar="INT",
         choices=range(1, 13),
-        help="Set the invoice period month. Default is the current month (%(default)s)",
+        help=" (%(default)s) set the invoice period month (%(choices)s)",
     )
+
     args = parser.parse_args(argv)
-
     store = Store()
-
     ret = 0
-
+    # First synch the db if the flag is set
     if args.synch:
-        ret |= synch(store)
-    elif args.interactive_mode:
+        ret = synch(store)
+    if args.interactive_mode:
         ret |= run_interactive(store, args.port)
     else:
         ret |= generate_invoice(store, args.year, args.month)
-
     return ret
 
 

@@ -15,19 +15,18 @@ class Store:
         if not os.path.exists(self.directory):
             os.makedirs(self.directory, exist_ok=True)
 
-        if not os.path.exists(self.db_path):
-            self.create_db()
+        self.create_db()
 
     def create_db(self, db_path: str | None = None) -> None:
         with self.connect(db_path) as db:
             db.executescript(
                 """\
-                CREATE TABLE workspace (
+                CREATE TABLE IF NOT EXISTS workspace (
                     id TEXT PRIMARY KEY,
                     name TEXT
                 );
 
-                CREATE TABLE user (
+                CREATE TABLE IF NOT EXISTS user (
                     id TEXT PRIMARY KEY,
                     name TEXT,
                     email TEXT,
@@ -38,7 +37,7 @@ class Store:
                     FOREIGN KEY (active_workspace) REFERENCES workspace(id)
                 );
 
-                CREATE TABLE time_entry (
+                CREATE TABLE IF NOT EXISTS time_entry (
                     id TEXT PRIMARY KEY,
                     start_time TEXT,
                     end_time TEXT,
@@ -48,23 +47,34 @@ class Store:
                     workspace TEXT,
                     FOREIGN KEY (user) REFERENCES user(id),
                     FOREIGN KEY (workspace) REFERENCES workspace(id)
-                );"""
+                );
+
+                CREATE TABLE IF NOT EXISTS invoice (
+                    id TEXT PRIMARY KEY,
+                    number INT,
+                    date TEXT,
+                    payer TEXT,
+                    payee TEXT,
+                    total REAL,
+                    pdf TEXT
+                );
+                """
             )
 
-    def clear_db(
-        self, db_path: str | None = None, table_name: str | None = None
-    ) -> None:
+    def get_next_invoice_number(self) -> int:
+        with self.connect() as db:
+            cur = db.execute("SELECT MAX(number) FROM invoice")
+            result = cur.fetchone()[0] or 0
+        return int(result) + 1
+
+    def clear_clockify_tables(self) -> None:
         """
-        Delete all data in all tables.
-        If table_name is given, only data in that table is deleted.
+        Delete all data in time_entry, user, and workspace
         """
-        with self.connect(db_path) as db:
-            if table_name:
-                db.execute(f"DELETE FROM {table_name}")
-            else:
-                db.execute("DELETE FROM user")
-                db.execute("DELETE FROM workspace")
-                db.execute("DELETE FROM time_entry")
+        with self.connect() as db:
+            db.execute("DELETE FROM time_entry")
+            db.execute("DELETE FROM user")
+            db.execute("DELETE FROM workspace")
 
     def get_workspace_id(self) -> str | None:
         if not self._workspace_id:
@@ -73,10 +83,7 @@ class Store:
                     "SELECT COALESCE(active_workspace, default_workspace) FROM user"
                 )
                 result = cur.fetchone()
-                try:
-                    self._workspace_id = result[0]
-                except TypeError:
-                    self._workspace_id = None
+            self._workspace_id = result[0]
         return self._workspace_id
 
     def get_user_id(self) -> str | None:
