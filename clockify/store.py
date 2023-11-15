@@ -2,11 +2,17 @@ import contextlib
 import os
 import sqlite3
 from collections.abc import Generator
+import logging
+
+logger = logging.getLogger("clockify-invoice")
 
 
 class Store:
     def __init__(self) -> None:
         self.directory = self._get_default_directory()
+
+        logger.info(f"Using store directory: {self.directory}")
+
         self.db_path = os.path.join(self.directory, "db.db")
         self._workspace_id = None
         self._user_id = None
@@ -83,7 +89,8 @@ class Store:
                     "SELECT COALESCE(active_workspace, default_workspace) FROM user"
                 )
                 result = cur.fetchone()
-            self._workspace_id = result[0]
+            if result:
+                self._workspace_id = result[0]
         return self._workspace_id
 
     def get_user_id(self) -> str | None:
@@ -98,16 +105,16 @@ class Store:
 
     @staticmethod
     def _get_default_directory() -> str:
-        return os.path.join(
-            os.getenv("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"), "clockify"
+        return os.getenv("CLOCKIFY_INVOICE_HOME") or os.path.join(
+            os.path.expanduser("~"),
+            "clockify-invoice",
         )
 
     @contextlib.contextmanager
     def connect(
         self, db_path: str | None = None
     ) -> Generator[sqlite3.Connection, None, None]:
-        if db_path is None:
-            db_path = self.db_path
-        with contextlib.closing(sqlite3.connect(db_path)) as db:
+        logger.info(f"Connecting to db... {self.db_path}")
+        with contextlib.closing(sqlite3.connect(self.db_path)) as db:
             with db:
                 yield db

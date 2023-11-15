@@ -32,7 +32,7 @@ logging.basicConfig(
     format="[%(levelname)s] %(message)s",
 )
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("clockify-invoice")
 app = Flask(__name__)
 
 
@@ -101,6 +101,7 @@ def process_invoice() -> str:
 
     if "invoice" in session:
         invoice: Invoice = pickle.loads(session["invoice"])
+        invoice.store = store
         invoice.invoice_number = invoice_number
         invoice.period_start = period_start
         invoice.period_end = period_end
@@ -123,6 +124,13 @@ def process_invoice() -> str:
     return invoice.html(form_data=form_data)
 
 
+@app.route("/synch", methods=["GET", "POST"])
+def synch() -> werkzeug.wrappers.Response:
+    store = app.config["store"]
+    synch_with_clockify(store)
+    return redirect("/")
+
+
 def get_api_key() -> str:
     api_key = os.getenv("CLOCKIFY_API_KEY")
     if api_key is None:
@@ -134,10 +142,10 @@ def get_api_key() -> str:
     return api_key
 
 
-def run_interactive(store: Store, port: int) -> int:
+def run_interactive(store: Store, host: str, port: int) -> int:
     app.config["store"] = store
     app.secret_key = get_api_key()
-    app.run(host="0.0.0.0", port=port, debug=True, use_reloader=False)
+    app.run(host=host, port=port, debug=True, use_reloader=False)
     return 0
 
 
@@ -247,7 +255,7 @@ def synch_time_entries(
     db.executemany("INSERT INTO time_entry VALUES(?,?,?,?,?,?,?)", data)
 
 
-def synch(store: Store) -> int:
+def synch_with_clockify(store: Store) -> int:
     # Create a back up of the db
     fd, backup_db = tempfile.mkstemp(dir=store.directory)
     os.close(fd)
@@ -288,6 +296,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="run a local server to create invoices interactively in the browser",
     )
     parser.add_argument(
+        "--host",
+        default="0.0.0.0",
+        help=("(%(default)s) set the host to use when running in interactive mode."),
+    )
+    parser.add_argument(
         "--port",
         "-p",
         type=int,
@@ -315,9 +328,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     ret = 0
     # First synch the db if the flag is set
     if args.synch:
-        ret = synch(store)
+        ret = synch_with_clockify(store)
     if args.interactive_mode:
-        ret |= run_interactive(store, args.port)
+        ret |= run_interactive(store, args.host, args.port)
     else:
         ret |= generate_invoice(store, args.year, args.month)
     return ret
