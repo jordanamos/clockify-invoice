@@ -114,7 +114,6 @@ class Store:
     def connect(
         self, db_path: str | None = None
     ) -> Generator[sqlite3.Connection, None, None]:
-        logger.info(f"Connecting to db... {self.db_path}")
         with contextlib.closing(sqlite3.connect(self.db_path)) as db:
             with db:
                 yield db
