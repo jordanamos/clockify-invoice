@@ -9,3 +9,4 @@ services:
       - CLOCKIFY_INVOICE_HOME=/invoices
     volumes:
       - ./invoices:/invoices
+a

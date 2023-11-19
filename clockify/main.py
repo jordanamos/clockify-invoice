@@ -97,8 +97,10 @@ def process_invoice() -> str:
     start_year, start_month = int(form_data["year"]), int(form_data["month"])
     end_month = 1 if start_month == 12 else start_month + 1
     end_year = start_year + 1 if start_month == 12 else start_year
-    
-    period_start, period_end = date(start_year, start_month, 1), date(end_year, end_month, 1)
+
+    period_start, period_end = date(start_year, start_month, 1), date(
+        end_year, end_month, 1
+    )
 
     invoice_number = int(form_data["invoice-number"])
 

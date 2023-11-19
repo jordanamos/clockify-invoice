@@ -1,8 +1,8 @@
 import contextlib
+import logging
 import os
 import sqlite3
 from collections.abc import Generator
-import logging
 
 logger = logging.getLogger("clockify-invoice")
 
