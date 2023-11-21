@@ -219,7 +219,7 @@
                   <tr>
                     <th></th>
                     <th>#</th>
-                    <th>Date</th>
+                    <th>Period</th>
                     <th>Total</th>
                   </tr>
                 </thead>
@@ -237,7 +237,7 @@
                         </form>
                       </td>
                       <td>{{invoice.invoice_number}}</td>
-                      <td>{{invoice.invoice_date | format_date}}</td>
+                      <td>{{invoice.period_start | format_date}}</td>
                       <td>{{ "$%.2f" | format(invoice.total) }}</td>
                     </tr>
                     {% endfor %}
