@@ -1,10 +1,41 @@
+import base64
 import contextlib
+import datetime
 import logging
 import os
+import pickle
 import sqlite3
 from collections.abc import Generator
+from typing import Any
+
+from clockify.invoice import Invoice
+from clockify.invoice import TimeEntry
 
 logger = logging.getLogger("clockify-invoice")
+
+_TIME_ENTRIES_QUERY = """\
+SELECT MAX(end_time) AS date
+    , description
+    , SUM(duration_seconds)
+FROM time_entry
+WHERE user = ?
+    AND workspace = ?
+    AND start_time >= ?
+    AND end_time < ?
+    AND duration_seconds > 0
+GROUP BY description
+"""
+
+_INVOCES_QUERY = """\
+SELECT id, pickle
+FROM invoice
+"""
+
+_DELETE_INVOICE_QUERY = """\
+DELETE
+FROM INVOICE
+WHERE id = ?
+"""
 
 
 class Store:
@@ -19,6 +50,22 @@ class Store:
         if not os.path.exists(self.directory):
             os.makedirs(self.directory, exist_ok=True)
         self.create_db()
+
+    @staticmethod
+    def _get_default_directory() -> str:
+        return os.getenv("CLOCKIFY_INVOICE_HOME") or os.path.join(
+            os.path.expanduser("~"),
+            "clockify-invoice",
+        )
+
+    @contextlib.contextmanager
+    def connect(
+        self, db_path: str | None = None
+    ) -> Generator[sqlite3.Connection, None, None]:
+        path = db_path if db_path is not None else self.db_path
+        with contextlib.closing(sqlite3.connect(path)) as db:
+            with db:
+                yield db
 
     def create_db(self, db_path: str | None = None) -> None:
         with self.connect(db_path) as db:
@@ -62,10 +109,89 @@ class Store:
                     payee TEXT,
                     total REAL,
                     paid INT,
-                    pdf TEXT
+                    pdf TEXT,
+                    pickle TEXT
                 );
                 """
             )
+
+    def delete_invoice(self, id: int) -> None:
+        with self.connect() as db:
+            db.execute(_DELETE_INVOICE_QUERY, (id,))
+        logger.info(f"Deleted invoice [{id}]")
+
+    def get_time_entries(
+        self, start: datetime.date, end: datetime.date
+    ) -> list[TimeEntry]:
+        with self.connect() as db:
+            rows = db.execute(
+                _TIME_ENTRIES_QUERY,
+                (
+                    self.get_user_id(),
+                    self.get_workspace_id(),
+                    start,
+                    end,
+                ),
+            ).fetchall()
+
+        entries: list[TimeEntry] = []
+
+        for row in rows:
+            date = datetime.datetime.strptime(row[0], "%Y-%m-%d %H:%M:%S")
+            description = str(row[1])
+            duration_seconds = int(row[2])
+            duration_hours = (round((duration_seconds / 3600) * 4) / 4) or 0.25
+            time_entry = TimeEntry(date, description, duration_hours, 70.0)
+            entries.append(time_entry)
+
+        return entries
+
+    def save_invoice(self, invoice: Invoice) -> None:
+        invoice_data = (
+            invoice.invoice_number,
+            invoice.invoice_date,
+            invoice.period_start,
+            invoice.period_end,
+            invoice.company.name,
+            invoice.client.name,
+            invoice.total,
+            0,
+            base64.b64encode(invoice.pdf()).decode(),
+            base64.b64encode(pickle.dumps(invoice)).decode(),
+        )
+        with self.connect() as db:
+            cols = (
+                "number",
+                "date",
+                "period_start",
+                "period_end",
+                "payer",
+                "payee",
+                "total",
+                "paid",
+                "pdf",
+                "pickle",
+            )
+            db.execute(
+                f"INSERT INTO invoice({','.join(cols)}) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                invoice_data,
+            )
+
+    def get_invoices(self) -> list[dict[str, Any]]:
+        with self.connect() as db:
+            rows = db.execute(_INVOCES_QUERY).fetchall()
+
+        invoices: list[dict[str, Any]] = []
+
+        for row in rows:
+            invoice_id = int(row[0])
+            pickle_bytes = base64.b64decode(row[1])
+            invoice: Invoice = pickle.loads(pickle_bytes)
+            invoice_dict = invoice.to_dict()
+            invoice_dict.update({"invoice_id": invoice_id})
+            invoices.append(invoice_dict)
+
+        return invoices
 
     def get_next_invoice_number(self) -> int:
         with self.connect() as db:
@@ -102,18 +228,3 @@ class Store:
                 except TypeError:
                     self._user_id = None
         return self._user_id
-
-    @staticmethod
-    def _get_default_directory() -> str:
-        return os.getenv("CLOCKIFY_INVOICE_HOME") or os.path.join(
-            os.path.expanduser("~"),
-            "clockify-invoice",
-        )
-
-    @contextlib.contextmanager
-    def connect(
-        self, db_path: str | None = None
-    ) -> Generator[sqlite3.Connection, None, None]:
-        with contextlib.closing(sqlite3.connect(self.db_path)) as db:
-            with db:
-                yield db

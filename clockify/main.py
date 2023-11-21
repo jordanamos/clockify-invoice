@@ -1,5 +1,4 @@
 import argparse
-import base64
 import calendar as cal
 import io
 import logging
@@ -45,30 +44,23 @@ def format_date(value: date, format: str = "%d/%m/%Y") -> str:
     return value.strftime(format)
 
 
+@app.route("/delete_invoice/<int:invoice_id>", methods=["POST"])
+def delete_invoice(invoice_id: int) -> werkzeug.wrappers.Response:
+    store: Store = app.config["store"]
+    store.delete_invoice(invoice_id)
+    return redirect("/")
+
+
 @app.route("/download", methods=["GET"])
 def download() -> werkzeug.wrappers.Response:
     if "invoice" not in session:
         return redirect("/")
     invoice: Invoice = pickle.loads(session["invoice"])
-    pdf_bytes = invoice.pdf(form_data={"display-form": "none"})
+    pdf_bytes = invoice.pdf()
     store: Store = app.config["store"]
-    invoice_data = (
-        invoice.invoice_number,
-        invoice.invoice_date,
-        invoice.period_start,
-        invoice.period_end,
-        invoice.company.name,
-        invoice.client.name,
-        invoice.total,
-        0,
-        base64.b64encode(pdf_bytes).decode(),
-    )
-    with store.connect() as db:
-        cols = "number, date, period_start, period_end, payer, payee, total, paid, pdf"
-        db.execute(
-            f"INSERT INTO invoice({cols}) VALUES(?,?,?,?,?,?,?,?,?)",
-            invoice_data,
-        )
+
+    store.save_invoice(invoice)
+
     return send_file(
         io.BytesIO(pdf_bytes),
         mimetype="application/pdf",
@@ -106,27 +98,32 @@ def process_invoice() -> str:
 
     if "invoice" in session:
         invoice: Invoice = pickle.loads(session["invoice"])
-        invoice.store = store
         invoice.invoice_number = invoice_number
         invoice.period_start = period_start
         invoice.period_end = period_end
-        invoice.update_time_entries()
     else:
         invoice_company = "Jordan Amos"
         invoice_client = "6 Cloud Systems"
         invoice = Invoice(
-            store,
             invoice_number,
             invoice_company,
             invoice_client,
             period_start,
             period_end,
         )
-        invoice.update_time_entries()
+
+    invoice.time_entries = store.get_time_entries(
+        invoice.period_start, invoice.period_end
+    )
 
     session["invoice"] = pickle.dumps(invoice)
 
-    return invoice.html(form_data=form_data)
+    invoices = store.get_invoices()
+    invoices_total = sum(invoice["total"] for invoice in invoices)
+
+    return invoice.html(
+        form_data=form_data, invoices=invoices, invoices_total=invoices_total
+    )
 
 
 @app.route("/synch", methods=["GET", "POST"])
@@ -150,7 +147,7 @@ def get_api_key() -> str:
 def run_interactive(store: Store, host: str, port: int) -> int:
     app.config["store"] = store
     app.secret_key = get_api_key()
-    app.run(host=host, port=port, debug=True, use_reloader=False)
+    app.run(host=host, port=port, debug=True)
     return 0
 
 
@@ -173,14 +170,14 @@ def generate_invoice(
     period_start, period_end = date(year, month, 1), date(year, month + 1, 1)
 
     invoice = Invoice(
-        store,
         invoice_number,
         invoice_company,
         invoice_client,
         period_start,
         period_end,
     )
-    invoice.update_time_entries()
+
+    invoice.time_entries = store.get_time_entries(period_start, period_end)
 
     print(invoice)
 

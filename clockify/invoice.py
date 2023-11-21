@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import date
 from datetime import datetime
 from typing import Any
@@ -6,21 +8,6 @@ from typing import NamedTuple
 import tabulate
 from flask import render_template
 from weasyprint import HTML
-
-from clockify.store import Store
-
-TIME_ENTRIES_QUERY = """\
-SELECT MAX(end_time) AS date
-    , description
-    , SUM(duration_seconds)
-FROM time_entry
-WHERE user = ?
-    AND workspace = ?
-    AND start_time >= ?
-    AND end_time < ?
-    AND duration_seconds > 0
-GROUP BY description
-"""
 
 
 class TimeEntry(NamedTuple):
@@ -41,7 +28,6 @@ class Invoice:
 
     def __init__(
         self,
-        store: Store,
         invoice_number: int,
         company_name: str,
         client_name: str,
@@ -49,7 +35,6 @@ class Invoice:
         period_end: date,
         invoice_date: date = date.today(),
     ) -> None:
-        self.store = store
         self.invoice_date = invoice_date
         self.invoice_number = invoice_number
         self.company = Company(company_name)
@@ -62,45 +47,31 @@ class Invoice:
     def time_entries(self) -> list[TimeEntry]:
         return self._time_entries
 
+    @time_entries.setter
+    def time_entries(self, val: list[TimeEntry]) -> None:
+        self._time_entries = val
+
     @property
     def invoice_name(self) -> str:
         return (
             f"{self.invoice_date.strftime('%Y_%m')}_Invoice_{self.invoice_number}.pdf"
         )
 
-    def update_time_entries(self) -> None:
-        with self.store.connect() as db:
-            rows = db.execute(
-                TIME_ENTRIES_QUERY,
-                (
-                    self.store.get_user_id(),
-                    self.store.get_workspace_id(),
-                    self.period_start,
-                    self.period_end,
-                ),
-            ).fetchall()
-
-        entries: list[TimeEntry] = []
-
-        for row in rows:
-            date = datetime.strptime(row[0], "%Y-%m-%d %H:%M:%S")
-            description = str(row[1])
-            duration_seconds = int(row[2])
-            duration_hours = (round((duration_seconds / 3600) * 4) / 4) or 0.25
-            time_entry = TimeEntry(date, description, duration_hours, 70.0)
-            entries.append(time_entry)
-        self._time_entries = entries
-
     @property
     def total(self) -> float:
         return sum(entry.billable_amount for entry in self.time_entries)
 
-    def html(self, **kwargs: dict[str, Any]) -> str:
+    def html(self, **kwargs: Any) -> str:
         """Render the invoice html"""
         return render_template("invoice.html", invoice=self.to_dict(), **kwargs)
 
-    def pdf(self, **kwargs: dict[str, Any]) -> bytes:
-        html = HTML(string=self.html(**kwargs))
+    def pdf(self) -> bytes:
+        html = HTML(
+            string=self.html(
+                form_data={"display-form": "none"},
+                invoices_total=0,
+            )
+        )
         ret = html.write_pdf(target=None)
         if not ret:
             raise ValueError("Error generating invoice pdf")
