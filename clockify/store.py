@@ -39,6 +39,8 @@ WHERE id = ?
 
 
 class Store:
+    _DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
+
     def __init__(self) -> None:
         self.directory = self._get_default_directory()
 
@@ -137,7 +139,7 @@ class Store:
         entries: list[TimeEntry] = []
 
         for row in rows:
-            date = datetime.datetime.strptime(row[0], "%Y-%m-%d %H:%M:%S")
+            date = datetime.datetime.strptime(row[0], self._DATE_FORMAT)
             description = str(row[1])
             duration_seconds = int(row[2])
             duration_hours = (round((duration_seconds / 3600) * 4) / 4) or 0.25

@@ -8,4 +8,4 @@ services:
       - CLOCKIFY_API_KEY
       - CLOCKIFY_INVOICE_HOME=/invoices
     volumes:
-      - ./invoices:/invoices
+      - /Users/jamos/dev/repos/clockify-invoice/invoices:/invoices

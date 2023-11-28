@@ -119,6 +119,7 @@ def process_invoice() -> str:
     session["invoice"] = pickle.dumps(invoice)
 
     invoices = store.get_invoices()
+
     invoices_total = sum(invoice["total"] for invoice in invoices)
 
     return invoice.html(
@@ -236,13 +237,21 @@ def synch_time_entries(
         )
 
     for te in time_entries:
+        end = te["timeInterval"]["end"]
+        if end is None:
+            # No end date. Is the timer still going?
+            continue
+
         entry_id = te["id"]
-        start_time = _convert_datestr(te["timeInterval"]["start"])
-        start_time_formatted = datetime.strftime(start_time, "%Y-%m-%d %H:%M:%S")
-        end_time = _convert_datestr(te["timeInterval"]["end"])
-        end_time_formatted = datetime.strftime(end_time, "%Y-%m-%d %H:%M:%S")
-        duration_secs = (end_time - start_time).total_seconds()
         desc = te["description"]
+        start = te["timeInterval"]["start"]
+        start_time = _convert_datestr(start)
+        end_time = _convert_datestr(end)
+        start_time_formatted = datetime.strftime(start_time, Store._DATE_FORMAT)
+        end_time_formatted = datetime.strftime(end_time, Store._DATE_FORMAT)
+
+        duration_secs = (end_time - start_time).total_seconds()
+
         data.append(
             (
                 entry_id,
