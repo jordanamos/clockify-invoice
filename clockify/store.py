@@ -44,7 +44,7 @@ class Store:
     def __init__(self) -> None:
         self.directory = self._get_default_directory()
 
-        logger.info(f"Using store directory: {self.directory}")
+        logger.debug(f"Using store directory: {self.directory}")
 
         self.db_path = os.path.join(self.directory, "db.db")
         self._workspace_id = None

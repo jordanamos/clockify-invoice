@@ -180,7 +180,7 @@ def generate_invoice(
 
     invoice.time_entries = store.get_time_entries(period_start, period_end)
 
-    print(invoice)
+    print(invoice.to_string())
 
     return 0
 
@@ -296,6 +296,13 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     parser = argparse.ArgumentParser(description="Clockify Invoice Command Line Tool")
     parser.add_argument(
+        "--verbose",
+        "--debug",
+        "-v",
+        help="Show debug messaging",
+        action="store_true",
+    )
+    parser.add_argument(
         "--synch",
         help="synch the local db with clockify",
         action="store_true",
@@ -335,6 +342,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
 
     args = parser.parse_args(argv)
+    
+    if args.verbose:
+        logger.setLevel(logging.DEBUG)
+
     store = Store()
     ret = 0
     # First synch the db if the flag is set

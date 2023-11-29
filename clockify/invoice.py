@@ -89,7 +89,7 @@ class Invoice:
             "total": self.total,
         }
 
-    def __str__(self) -> str:
+    def to_string(self) -> str:
         table_data = [
             (
                 datetime.strftime(entry.date, "%d/%m/%Y"),
@@ -111,7 +111,6 @@ class Invoice:
             f"{table_str}\n\n"
             f"Total: {self.total}\n"
         )
-
 
 class Company:
     def __init__(self, name: str):
