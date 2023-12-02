@@ -20,6 +20,7 @@ from flask import redirect
 from flask import request
 from flask import send_file
 from flask import session
+from flask import url_for
 
 from clockify.api import ClockifyClient
 from clockify.api import ClockifySession
@@ -33,6 +34,10 @@ logging.basicConfig(
 
 logger = logging.getLogger("clockify-invoice")
 app = Flask(__name__)
+
+TODAY = date.today()
+YEARS = list(range(TODAY.year, TODAY.year - 5, -1))
+MONTHS = list(cal.month_name[1:])
 
 
 class APIKeyMissingError(Exception):
@@ -48,7 +53,8 @@ def format_date(value: date, format: str = "%d/%m/%Y") -> str:
 def delete_invoice(invoice_id: int) -> werkzeug.wrappers.Response:
     store: Store = app.config["store"]
     store.delete_invoice(invoice_id)
-    return redirect("/")
+
+    return redirect(url_for("process_invoice", active_tab="table-tab"))
 
 
 @app.route("/download", methods=["GET"])
@@ -69,23 +75,22 @@ def download() -> werkzeug.wrappers.Response:
     )
 
 
-@app.route("/", methods=["GET", "POST"])
-def process_invoice() -> str:
-    today = date.today()
-    years = list(range(today.year, today.year - 5, -1))
+@app.route("/<active_tab>", methods=["GET", "POST"])
+def process_invoice(active_tab: str | None) -> str:
+    print(active_tab)
     store: Store = app.config["store"]
     form_data: dict[str, Any] = {
-        "months": list(cal.month_name[1:]),
-        "years": years,
+        "months": MONTHS,
+        "years": YEARS,
         "display-form": "block",
         "invoice-number": store.get_next_invoice_number(),
-        "month": today.month,
-        "year": today.year,
+        "month": TODAY.month,
+        "year": TODAY.year,
+        "active-tab": active_tab if active_tab else "form-tab",
     }
 
     if request.method == "POST":
         form_data.update(request.form)
-
     start_year, start_month = int(form_data["year"]), int(form_data["month"])
     end_month = 1 if start_month == 12 else start_month + 1
     end_year = start_year + 1 if start_month == 12 else start_year
@@ -342,7 +347,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
 
     args = parser.parse_args(argv)
-    
+
     if args.verbose:
         logger.setLevel(logging.DEBUG)
 
