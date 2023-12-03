@@ -32,7 +32,7 @@ RUN adduser \
 WORKDIR /app
 
 # Copy the source code into the container.
-COPY clockify clockify
+COPY clockify_invoice clockify_invoice
 COPY setup.py .
 COPY setup.cfg .
 COPY README.md .
@@ -43,4 +43,4 @@ RUN python -m pip install . --no-cache-dir
 USER appuser
 
 # Run the application.
-CMD ["clockify", "--synch", "-i"]
+CMD ["clockify-invoice", "--synch", "-i"]

@@ -112,6 +112,7 @@ class Invoice:
             f"Total: {self.total}\n"
         )
 
+
 class Company:
     def __init__(self, name: str):
         self.name = name

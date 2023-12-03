@@ -20,12 +20,11 @@ from flask import redirect
 from flask import request
 from flask import send_file
 from flask import session
-from flask import url_for
 
-from clockify.api import ClockifyClient
-from clockify.api import ClockifySession
-from clockify.invoice import Invoice
-from clockify.store import Store
+from clockify_invoice.api import ClockifyClient
+from clockify_invoice.api import ClockifySession
+from clockify_invoice.invoice import Invoice
+from clockify_invoice.store import Store
 
 logging.basicConfig(
     level=logging.INFO,
@@ -53,8 +52,19 @@ def format_date(value: date, format: str = "%d/%m/%Y") -> str:
 def delete_invoice(invoice_id: int) -> werkzeug.wrappers.Response:
     store: Store = app.config["store"]
     store.delete_invoice(invoice_id)
+    session["active_tab"] = "table-tab"
+    return redirect("/")
 
-    return redirect(url_for("process_invoice", active_tab="table-tab"))
+
+@app.route("/save", methods=["GET"])
+def save() -> werkzeug.wrappers.Response:
+    if "invoice" not in session:
+        return redirect("/")
+    invoice: Invoice = pickle.loads(session["invoice"])
+    store: Store = app.config["store"]
+    store.save_invoice(invoice)
+    session["active_tab"] = "form-tab"
+    return redirect("/")
 
 
 @app.route("/download", methods=["GET"])
@@ -63,10 +73,7 @@ def download() -> werkzeug.wrappers.Response:
         return redirect("/")
     invoice: Invoice = pickle.loads(session["invoice"])
     pdf_bytes = invoice.pdf()
-    store: Store = app.config["store"]
-
-    store.save_invoice(invoice)
-
+    session["active_tab"] = "form-tab"
     return send_file(
         io.BytesIO(pdf_bytes),
         mimetype="application/pdf",
@@ -75,10 +82,15 @@ def download() -> werkzeug.wrappers.Response:
     )
 
 
-@app.route("/<active_tab>", methods=["GET", "POST"])
-def process_invoice(active_tab: str | None) -> str:
-    print(active_tab)
+@app.route("/", methods=["GET", "POST"])
+def process_invoice() -> str:
     store: Store = app.config["store"]
+    if request.method == "GET":
+        active_tab = session.get("active_tab", "form-tab")
+    else:
+        active_tab = "form-tab"
+        session["active_tab"] = "form-tab"
+
     form_data: dict[str, Any] = {
         "months": MONTHS,
         "years": YEARS,
@@ -86,9 +98,8 @@ def process_invoice(active_tab: str | None) -> str:
         "invoice-number": store.get_next_invoice_number(),
         "month": TODAY.month,
         "year": TODAY.year,
-        "active-tab": active_tab if active_tab else "form-tab",
+        "active-tab": active_tab,
     }
-
     if request.method == "POST":
         form_data.update(request.form)
     start_year, start_month = int(form_data["year"]), int(form_data["month"])
@@ -122,9 +133,7 @@ def process_invoice(active_tab: str | None) -> str:
     )
 
     session["invoice"] = pickle.dumps(invoice)
-
     invoices = store.get_invoices()
-
     invoices_total = sum(invoice["total"] for invoice in invoices)
 
     return invoice.html(
@@ -132,10 +141,11 @@ def process_invoice(active_tab: str | None) -> str:
     )
 
 
-@app.route("/synch", methods=["GET", "POST"])
+@app.route("/synch", methods=["GET"])
 def synch() -> werkzeug.wrappers.Response:
     store = app.config["store"]
     synch_with_clockify(store)
+    session["active_table"] = "form-tab"
     return redirect("/")
 
 
