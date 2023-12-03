@@ -2,15 +2,10 @@ import argparse
 import calendar as cal
 import io
 import logging
-import os
 import pickle
-import shutil
-import sqlite3
-import tempfile
 from collections.abc import Sequence
 from datetime import date
 from datetime import datetime
-from datetime import timezone
 from typing import Any
 from typing import Literal
 
@@ -21,10 +16,11 @@ from flask import request
 from flask import send_file
 from flask import session
 
-from clockify_invoice.api import ClockifyClient
-from clockify_invoice.api import ClockifySession
 from clockify_invoice.invoice import Invoice
 from clockify_invoice.store import Store
+from clockify_invoice.utils import auth_required
+from clockify_invoice.utils import get_api_key
+from clockify_invoice.utils import synch_with_clockify
 
 logging.basicConfig(
     level=logging.INFO,
@@ -33,16 +29,12 @@ logging.basicConfig(
 
 logger = logging.getLogger("clockify-invoice")
 app = Flask(__name__)
-
+app.config.from_prefixed_env  # type: ignore
 
 # Constants
 TODAY = date.today()
 YEARS = list(range(TODAY.year, TODAY.year - 5, -1))
 MONTHS = list(cal.month_name[1:])
-
-
-class APIKeyMissingError(Exception):
-    pass
 
 
 @app.template_filter("format_financial_year")
@@ -58,6 +50,7 @@ def format_date(value: date, format: str = "%d/%m/%Y") -> str:
 
 
 @app.route("/delete_invoice/<int:invoice_id>", methods=["POST"])
+@auth_required
 def delete_invoice(invoice_id: int) -> werkzeug.wrappers.Response:
     store: Store = app.config["store"]
     store.delete_invoice(invoice_id)
@@ -66,6 +59,7 @@ def delete_invoice(invoice_id: int) -> werkzeug.wrappers.Response:
 
 
 @app.route("/save", methods=["GET"])
+@auth_required
 def save() -> werkzeug.wrappers.Response:
     if "invoice" not in session:
         return redirect("/")
@@ -76,6 +70,7 @@ def save() -> werkzeug.wrappers.Response:
 
 
 @app.route("/download", methods=["GET"])
+@auth_required
 def download() -> werkzeug.wrappers.Response:
     if "invoice" not in session:
         return redirect("/")
@@ -90,6 +85,7 @@ def download() -> werkzeug.wrappers.Response:
 
 
 @app.route("/", methods=["GET", "POST"])
+@auth_required
 def process_invoice() -> str:
     store: Store = app.config["store"]
 
@@ -138,29 +134,18 @@ def process_invoice() -> str:
     session["invoice"] = pickle.dumps(invoice)
     invoices = store.get_invoices(int(form_data["financial-year"]))
     invoices_total = sum(invoice["total"] for invoice in invoices)
-
     return invoice.html(
         form_data=form_data, invoices=invoices, invoices_total=invoices_total
     )
 
 
 @app.route("/synch", methods=["GET"])
+@auth_required
 def synch() -> werkzeug.wrappers.Response:
     store = app.config["store"]
     synch_with_clockify(store)
     session["active-table"] = "form-tab"
     return redirect("/")
-
-
-def get_api_key() -> str:
-    api_key = os.getenv("CLOCKIFY_API_KEY")
-    if api_key is None:
-        raise APIKeyMissingError(
-            "'CLOCKIFY_API_KEY' environment variable not set.\n"
-            "Connection to Clockify's API requires an API Key which can"
-            "be found in your user settings."
-        )
-    return api_key
 
 
 def run_interactive(store: Store, host: str, port: int) -> int:
@@ -200,112 +185,6 @@ def generate_invoice(
 
     print(invoice.to_string())
 
-    return 0
-
-
-def synch_user(api_session: ClockifyClient, db: sqlite3.Connection) -> tuple[str, str]:
-    """
-    Fetches the User from the clockify API and inserts the User into the db.
-    Returns the user id and workspace id
-    """
-    user = api_session.get_user()
-    user_id = user["id"]
-    active_workspace = user["activeWorkspace"]
-    default_workspace = user["defaultWorkspace"]
-    workspace = active_workspace or default_workspace
-    user_table_data = (
-        user_id,
-        user["name"],
-        user["email"],
-        default_workspace,
-        active_workspace,
-        user["settings"]["timeZone"],
-    )
-
-    if not user_id:
-        raise ValueError(f"SYNCH FAILED: Invalid User {user_id}")
-    if not workspace:
-        raise ValueError("SYNCH FAILED: Unable to fetch Workspace")
-
-    db.execute("INSERT INTO user VALUES(?,?,?,?,?,?)", user_table_data)
-    return user_id, workspace
-
-
-def synch_workspaces(api_session: ClockifyClient, db: sqlite3.Connection) -> None:
-    workspaces = api_session.get_workspaces()
-    workspaces_data = [(ws["id"], ws["name"]) for ws in workspaces]
-    db.executemany("INSERT INTO workspace VALUES(?,?)", workspaces_data)
-
-
-def synch_time_entries(
-    api_session: ClockifyClient,
-    db: sqlite3.Connection,
-    user_id: str,
-    workspace_id: str,
-) -> None:
-    time_entries = api_session.get_time_entries(workspace_id, user_id)
-    clockify_date_format = "%Y-%m-%dT%H:%M:%SZ"
-    data = []
-
-    def _convert_datestr(datestr: str) -> datetime:
-        return (
-            datetime.strptime(datestr, clockify_date_format)
-            .replace(tzinfo=timezone.utc)
-            .astimezone(tz=None)
-        )
-
-    for te in time_entries:
-        end = te["timeInterval"]["end"]
-        if end is None:
-            # No end date. Is the timer still going?
-            continue
-
-        entry_id = te["id"]
-        desc = te["description"]
-        start = te["timeInterval"]["start"]
-        start_time = _convert_datestr(start)
-        end_time = _convert_datestr(end)
-        start_time_formatted = datetime.strftime(start_time, Store._DATE_FORMAT)
-        end_time_formatted = datetime.strftime(end_time, Store._DATE_FORMAT)
-
-        duration_secs = (end_time - start_time).total_seconds()
-
-        data.append(
-            (
-                entry_id,
-                start_time_formatted,
-                end_time_formatted,
-                duration_secs,
-                desc,
-                user_id,
-                workspace_id,
-            )
-        )
-    db.executemany("INSERT INTO time_entry VALUES(?,?,?,?,?,?,?)", data)
-
-
-def synch_with_clockify(store: Store) -> int:
-    # Create a back up of the db
-    fd, backup_db = tempfile.mkstemp(dir=store.directory)
-    os.close(fd)
-    shutil.copy(store.db_path, backup_db)
-    try:
-        store.clear_clockify_tables()
-        with (
-            ClockifySession(get_api_key()) as session,
-            store.connect() as db,
-        ):
-            logger.info("Synching the local db with clockify...")
-            client = ClockifyClient(session)
-            user_id, workspace_id = synch_user(client, db)
-            synch_workspaces(client, db)
-            synch_time_entries(client, db, user_id, workspace_id)
-    except (KeyboardInterrupt, Exception):
-        # Something bad happened restore the db backup
-        os.replace(backup_db, store.db_path)
-        raise
-    else:
-        os.remove(backup_db)
     return 0
 
 
