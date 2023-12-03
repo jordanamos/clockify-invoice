@@ -146,10 +146,10 @@ def synch() -> werkzeug.wrappers.Response:
     return redirect("/")
 
 
-def run_interactive(store: Store, host: str, port: int) -> int:
+def run_interactive(store: Store, host: str, port: int, debug: bool) -> int:
     app.config["store"] = store
     app.secret_key = get_api_key()
-    app.run(host=host, port=port, debug=True)
+    app.run(host=host, port=port, debug=debug)
     return 0
 
 
@@ -191,8 +191,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     parser = argparse.ArgumentParser(description="Clockify Invoice Command Line Tool")
     parser.add_argument(
-        "--verbose",
         "--debug",
+        "--verbose",
         "-v",
         help="Show debug messaging",
         action="store_true",
@@ -238,7 +238,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
 
-    if args.verbose:
+    if args.debug:
         logger.setLevel(logging.DEBUG)
 
     store = Store()
@@ -247,7 +247,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.synch:
         ret = synch_with_clockify(store)
     if args.interactive_mode:
-        ret |= run_interactive(store, args.host, args.port)
+        ret |= run_interactive(store, args.host, args.port, args.debug)
     else:
         ret |= generate_invoice(store, args.year, args.month)
     return ret
