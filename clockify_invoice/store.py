@@ -8,8 +8,8 @@ import sqlite3
 from collections.abc import Generator
 from typing import Any
 
-from clockify.invoice import Invoice
-from clockify.invoice import TimeEntry
+from clockify_invoice.invoice import Invoice
+from clockify_invoice.invoice import TimeEntry
 
 logger = logging.getLogger("clockify-invoice")
 

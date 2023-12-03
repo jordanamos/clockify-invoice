@@ -111,7 +111,6 @@ def process_invoice() -> str:
     )
 
     invoice_number = int(form_data["invoice-number"])
-
     if "invoice" in session:
         invoice: Invoice = pickle.loads(session["invoice"])
         invoice.invoice_number = invoice_number
