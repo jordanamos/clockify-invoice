@@ -20,6 +20,7 @@ from clockify_invoice.invoice import Invoice
 from clockify_invoice.store import Store
 from clockify_invoice.utils import auth_required
 from clockify_invoice.utils import get_api_key
+from clockify_invoice.utils import get_period_dates
 from clockify_invoice.utils import synch_with_clockify
 
 logging.basicConfig(
@@ -104,11 +105,8 @@ def process_invoice() -> str:
         form_data.update(request.form)
 
     start_year, start_month = int(form_data["year"]), int(form_data["month"])
-    end_month = 1 if start_month == 12 else start_month + 1
-    end_year = start_year + 1 if start_month == 12 else start_year
+    period_start, period_end = get_period_dates(start_year, start_month)
 
-    period_start = date(start_year, start_month, 1)
-    period_end = date(end_year, end_month, 1)
     invoice_number = int(form_data["invoice-number"])
 
     if "invoice" in session:
@@ -171,7 +169,7 @@ def generate_invoice(
     invoice_company = "Jordan Amos"
     invoice_client = "6 Cloud Systems"
 
-    period_start, period_end = date(year, month, 1), date(year, month + 1, 1)
+    period_start, period_end = get_period_dates(year, month)
 
     invoice = Invoice(
         invoice_number,

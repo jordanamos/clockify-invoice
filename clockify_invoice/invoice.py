@@ -104,7 +104,7 @@ class Invoice:
         table_str = tabulate.tabulate(table_data, headers=headers)
         return (
             f"Invoice #: {self.invoice_number}\n"
-            f"Invoice Date: {self.invoice_date}:\n"
+            f"Invoice Date: {self.invoice_date}\n"
             f"Payee: {self.company.name}\n"
             f"Payer: {self.client.name}\n"
             f"Invoice Period: {self.period_start} to {self.period_end}\n\n"

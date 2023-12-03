@@ -5,6 +5,7 @@ import shutil
 import sqlite3
 import tempfile
 from collections.abc import Callable
+from datetime import date
 from datetime import datetime
 from datetime import timezone
 from typing import Any
@@ -41,6 +42,14 @@ def auth_required(func: Callable[..., Any]) -> Any:
         )
 
     return wrapper
+
+
+def get_period_dates(start_year: int, start_month: int) -> tuple[date, date]:
+    end_month = 1 if start_month == 12 else start_month + 1
+    end_year = start_year + 1 if start_month == 12 else start_year
+    period_start = date(start_year, start_month, 1)
+    period_end = date(end_year, end_month, 1)
+    return period_start, period_end
 
 
 def get_api_key() -> str:
