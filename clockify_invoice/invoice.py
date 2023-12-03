@@ -68,7 +68,7 @@ class Invoice:
     def pdf(self) -> bytes:
         html = HTML(
             string=self.html(
-                form_data={"display-form": "none"},
+                form_data={"display_form": "none"},
                 invoices_total=0,
             )
         )

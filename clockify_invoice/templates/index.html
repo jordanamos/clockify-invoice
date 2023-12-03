@@ -133,7 +133,7 @@
                 <a
                   class="nav-link active"
                   id="form-tab"
-                  onclick="toggle(this, 'invoice-form');"
+                  onclick="toggle(this, 'invoice-form-container');"
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -192,13 +192,14 @@
       });
       document.getElementById(divID).style.display = "block";
       tab.classList.add("active");
+      document.getElementById('active-tab').setAttribute('value', tab.id);
     }
 
     function setTab(tabID) {
       if (tabID){
         var tab = document.getElementById(tabID);
         if (tabID == 'form-tab'){
-          toggle(tab, 'invoice-form');
+          toggle(tab, 'invoice-form-container');
         }
         else if (tabID == 'table-tab'){
           toggle(tab, 'invoice-table');

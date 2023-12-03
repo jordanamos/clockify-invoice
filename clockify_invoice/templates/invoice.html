@@ -1,7 +1,9 @@
 {% extends 'index.html' %}
 {% block form %}
-  <div class="side-element" id="invoice-form" style="display: block;">
-    <form method="POST">
+  <div class="side-element" id="invoice-form-container" style="display: block;">
+    <form method="POST" id="invoice-form">
+    <input type="hidden" name="active-tab" id="active-tab"></input>
+    <input type="hidden" name="financial-year" id="financial-year"></input>
       <div class="mb-2">
         <script>
           function setStatus() {
@@ -84,43 +86,71 @@
 {% endblock %}
 
 {% block table %}
-    <div class="side-element table-responsive" id="invoice-table" style="display: none;">
-        <table class="table table-hover ">
-        <caption>{{ "$%.2f" | format(invoices_total) }}</caption>
-        <thead>
-            <tr>
-            <th></th>
-            <th>#</th>
-            <th>Period</th>
-            <th>Total</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for invoice in invoices %}
-            <tr>
-                <td>
-                <form action="{{ url_for('delete_invoice', invoice_id=invoice['invoice_id']) }}" method="POST">
-                    <button class="btn btn-sm btn-danger" type="submit">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-trash" viewBox="0 0 16 16">
-                        <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5Zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5Zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6Z"></path>
-                        <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1ZM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118ZM2.5 3h11V2h-11v1Z"></path>
-                    </svg>
-                    </button>
-                </form>
-                </td>
-                <td>{{invoice.invoice_number}}</td>
-                <td>{{invoice.period_start.strftime('%b %Y')}}</td>
-                <td>{{ "$%.2f" | format(invoice.total) }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-        </table>
-    </div>
+    <span  class="side-element" id="invoice-table" style="display: none;">
+        <script>
+            function submitInvoiceForm(financialYear) {
+                document.getElementById('financial-year').value = financialYear;
+                document.getElementById('invoice-form').submit();
+            }
+        </script>
+        <div class="input-group mb-3">
+            <div class="input-group-prepend">
+                <span class="input-group-text">Financial Year</span>
+            </div>
+            <select
+                class="form-select form-select-sm"
+                aria-label="form-select-sm"
+                onchange="submitInvoiceForm(this.value)"
+                required
+            >
+                {% for year in form_data['years'] %}
+                    <option
+                        value={{ year }}
+                        {% if form_data['financial-year'] | int == year %} selected {% endif %}
+                    >
+                        {{ year | format_financial-year}}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover ">
+            <caption>{{ "$%.2f" | format(invoices_total) }}</caption>
+            <thead>
+                <tr>
+                <th></th>
+                <th>#</th>
+                <th>Period</th>
+                <th>Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for invoice in invoices %}
+                <tr>
+                    <td>
+                    <form action="{{ url_for('delete_invoice', invoice_id=invoice['invoice_id']) }}" method="POST">
+                        <button class="btn btn-sm btn-danger" type="submit">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-trash" viewBox="0 0 16 16">
+                            <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5Zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5Zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6Z"></path>
+                            <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1ZM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118ZM2.5 3h11V2h-11v1Z"></path>
+                        </svg>
+                        </button>
+                    </form>
+                    </td>
+                    <td>{{invoice.invoice_number}}</td>
+                    <td>{{invoice.period_start.strftime('%b %Y')}}</td>
+                    <td>{{ "$%.2f" | format(invoice.total) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            </table>
+        </div>
+    </span>
 {% endblock %}
 
 {% block invoice %}
     <div class="invoice-box">
-        <svg id="invoice-status-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-check-circle-fill" viewBox="0 0 16 16" style="color: #0275d8; position: absolute; display:{{form_data['display-form']}};">
+        <svg id="invoice-status-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-check-circle-fill" viewBox="0 0 16 16" style="color: #0275d8; position: absolute; display:{{form_data['display_form']}};">
             <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0m-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/>
           </svg>
         <table cellpadding="0" cellspacing="0">

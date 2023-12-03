@@ -34,6 +34,8 @@ logging.basicConfig(
 logger = logging.getLogger("clockify-invoice")
 app = Flask(__name__)
 
+
+# Constants
 TODAY = date.today()
 YEARS = list(range(TODAY.year, TODAY.year - 5, -1))
 MONTHS = list(cal.month_name[1:])
@@ -41,6 +43,13 @@ MONTHS = list(cal.month_name[1:])
 
 class APIKeyMissingError(Exception):
     pass
+
+
+@app.template_filter("format_financial_year")
+def format_financial_year(year: int) -> str:
+    start_date = datetime(year, 6, 30)
+    end_date = datetime(year + 1, 7, 1)
+    return f"{start_date.strftime('%Y')}-{end_date.strftime('%y')}"
 
 
 @app.template_filter("format_date")
@@ -52,7 +61,7 @@ def format_date(value: date, format: str = "%d/%m/%Y") -> str:
 def delete_invoice(invoice_id: int) -> werkzeug.wrappers.Response:
     store: Store = app.config["store"]
     store.delete_invoice(invoice_id)
-    session["active_tab"] = "table-tab"
+    session["active-tab"] = "table-tab"
     return redirect("/")
 
 
@@ -63,7 +72,7 @@ def save() -> werkzeug.wrappers.Response:
     invoice: Invoice = pickle.loads(session["invoice"])
     store: Store = app.config["store"]
     store.save_invoice(invoice)
-    session["active_tab"] = "form-tab"
+    session["active-tab"] = "table-tab"
     return redirect("/")
 
 
@@ -73,7 +82,7 @@ def download() -> werkzeug.wrappers.Response:
         return redirect("/")
     invoice: Invoice = pickle.loads(session["invoice"])
     pdf_bytes = invoice.pdf()
-    session["active_tab"] = "form-tab"
+    session["active-tab"] = "form-tab"
     return send_file(
         io.BytesIO(pdf_bytes),
         mimetype="application/pdf",
@@ -85,30 +94,28 @@ def download() -> werkzeug.wrappers.Response:
 @app.route("/", methods=["GET", "POST"])
 def process_invoice() -> str:
     store: Store = app.config["store"]
-    if request.method == "GET":
-        active_tab = session.get("active_tab", "form-tab")
-    else:
-        active_tab = "form-tab"
-        session["active_tab"] = "form-tab"
 
     form_data: dict[str, Any] = {
         "months": MONTHS,
         "years": YEARS,
-        "display-form": "block",
-        "invoice-number": store.get_next_invoice_number(),
         "month": TODAY.month,
         "year": TODAY.year,
-        "active-tab": active_tab,
+        "financial-year": TODAY.year,
+        "display-form": "block",
+        "invoice-number": store.get_next_invoice_number(),
+        "active-tab": "form-tab",
     }
     if request.method == "POST":
         form_data.update(request.form)
+
+    print(form_data)
+
     start_year, start_month = int(form_data["year"]), int(form_data["month"])
     end_month = 1 if start_month == 12 else start_month + 1
     end_year = start_year + 1 if start_month == 12 else start_year
 
-    period_start, period_end = date(start_year, start_month, 1), date(
-        end_year, end_month, 1
-    )
+    period_start = date(start_year, start_month, 1)
+    period_end = date(end_year, end_month, 1)
 
     invoice_number = int(form_data["invoice-number"])
     if "invoice" in session:
@@ -132,7 +139,7 @@ def process_invoice() -> str:
     )
 
     session["invoice"] = pickle.dumps(invoice)
-    invoices = store.get_invoices()
+    invoices = store.get_invoices(int(form_data["financial-year"]))
     invoices_total = sum(invoice["total"] for invoice in invoices)
 
     return invoice.html(
@@ -144,7 +151,7 @@ def process_invoice() -> str:
 def synch() -> werkzeug.wrappers.Response:
     store = app.config["store"]
     synch_with_clockify(store)
-    session["active_table"] = "form-tab"
+    session["active-table"] = "form-tab"
     return redirect("/")
 
 

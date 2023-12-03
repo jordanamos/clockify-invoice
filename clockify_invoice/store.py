@@ -29,6 +29,8 @@ GROUP BY description
 _INVOCES_QUERY = """\
 SELECT id, pickle
 FROM invoice
+WHERE period_start > ?
+    AND period_end < ?
 """
 
 _DELETE_INVOICE_QUERY = """\
@@ -179,9 +181,11 @@ class Store:
                 invoice_data,
             )
 
-    def get_invoices(self) -> list[dict[str, Any]]:
+    def get_invoices(self, financial_year: int) -> list[dict[str, Any]]:
+        start_date = datetime.datetime(financial_year, 6, 30)
+        end_date = datetime.datetime(financial_year + 1, 7, 1)
         with self.connect() as db:
-            rows = db.execute(_INVOCES_QUERY).fetchall()
+            rows = db.execute(_INVOCES_QUERY, (start_date, end_date)).fetchall()
 
         invoices: list[dict[str, Any]] = []
 
