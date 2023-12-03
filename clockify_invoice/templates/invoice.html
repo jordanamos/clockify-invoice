@@ -1,9 +1,9 @@
 {% extends 'index.html' %}
 {% block form %}
-  <div class="side-element" id="invoice-form-container" style="display: block;">
+  <div class="side-element mt-2" id="invoice-form-container" style="display: block;">
     <form method="POST" id="invoice-form">
-    <input type="hidden" name="active-tab" id="active-tab"></input>
-    <input type="hidden" name="financial-year" id="financial-year"></input>
+        <input type="hidden" name="active-tab" id="active-tab"></input>
+        <input type="hidden" name="financial-year" id="financial-year"></input>
       <div class="mb-2">
         <script>
           function setStatus() {
@@ -93,7 +93,7 @@
                 document.getElementById('invoice-form').submit();
             }
         </script>
-        <div class="input-group mb-3">
+        <div class="input-group mt-2">
             <div class="input-group-prepend">
                 <span class="input-group-text">Financial Year</span>
             </div>
@@ -108,7 +108,7 @@
                         value={{ year }}
                         {% if form_data['financial-year'] | int == year %} selected {% endif %}
                     >
-                        {{ year | format_financial-year}}
+                        {{ year | format_financial_year}}
                     </option>
                 {% endfor %}
             </select>
@@ -120,7 +120,7 @@
                 <tr>
                 <th></th>
                 <th>#</th>
-                <th>Period</th>
+                <th>Month</th>
                 <th>Total</th>
                 </tr>
             </thead>
@@ -150,7 +150,7 @@
 
 {% block invoice %}
     <div class="invoice-box">
-        <svg id="invoice-status-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-check-circle-fill" viewBox="0 0 16 16" style="color: #0275d8; position: absolute; display:{{form_data['display_form']}};">
+        <svg id="invoice-status-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-check-circle-fill" viewBox="0 0 16 16" style="color: #0275d8; position: absolute; display:{{form_data['display-form']}};">
             <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0m-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/>
           </svg>
         <table cellpadding="0" cellspacing="0">

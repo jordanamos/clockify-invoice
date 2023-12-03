@@ -72,7 +72,6 @@ def save() -> werkzeug.wrappers.Response:
     invoice: Invoice = pickle.loads(session["invoice"])
     store: Store = app.config["store"]
     store.save_invoice(invoice)
-    session["active-tab"] = "table-tab"
     return redirect("/")
 
 
@@ -82,12 +81,11 @@ def download() -> werkzeug.wrappers.Response:
         return redirect("/")
     invoice: Invoice = pickle.loads(session["invoice"])
     pdf_bytes = invoice.pdf()
-    session["active-tab"] = "form-tab"
     return send_file(
         io.BytesIO(pdf_bytes),
-        mimetype="application/pdf",
-        as_attachment=True,
-        download_name=invoice.invoice_name,  # type: ignore
+        "application/pdf",
+        True,
+        invoice.invoice_name,
     )
 
 
@@ -103,12 +101,11 @@ def process_invoice() -> str:
         "financial-year": TODAY.year,
         "display-form": "block",
         "invoice-number": store.get_next_invoice_number(),
-        "active-tab": "form-tab",
+        "active-tab": session.get("active-tab") or "form-tab",
     }
+
     if request.method == "POST":
         form_data.update(request.form)
-
-    print(form_data)
 
     start_year, start_month = int(form_data["year"]), int(form_data["month"])
     end_month = 1 if start_month == 12 else start_month + 1
@@ -116,8 +113,8 @@ def process_invoice() -> str:
 
     period_start = date(start_year, start_month, 1)
     period_end = date(end_year, end_month, 1)
-
     invoice_number = int(form_data["invoice-number"])
+
     if "invoice" in session:
         invoice: Invoice = pickle.loads(session["invoice"])
         invoice.invoice_number = invoice_number

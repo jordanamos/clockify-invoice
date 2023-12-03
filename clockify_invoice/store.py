@@ -196,7 +196,6 @@ class Store:
             invoice_dict = invoice.to_dict()
             invoice_dict.update({"invoice_id": invoice_id})
             invoices.append(invoice_dict)
-
         return invoices
 
     def get_next_invoice_number(self) -> int:
