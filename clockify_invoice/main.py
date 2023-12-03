@@ -29,7 +29,7 @@ logging.basicConfig(
 
 logger = logging.getLogger("clockify-invoice")
 app = Flask(__name__)
-app.config.from_prefixed_env  # type: ignore
+app.config.from_prefixed_env()  # type: ignore
 
 # Constants
 TODAY = date.today()
