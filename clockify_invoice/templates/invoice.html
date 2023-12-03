@@ -1,0 +1,227 @@
+{% extends 'index.html' %}
+{% block form %}
+  <div class="side-element mt-2" id="invoice-form-container" style="display: block;">
+    <form method="POST" id="invoice-form">
+        <input type="hidden" name="active-tab" id="active-tab"></input>
+        <input type="hidden" name="financial-year" id="financial-year"></input>
+      <div class="mb-2">
+        <script>
+          function setStatus() {
+              var icon = document.getElementById('invoice-status-icon');
+              icon.style.color = 'red';
+          }
+        </script>
+        <label for="invoice-number" class="form-label">Invoice Number</label>
+        <input
+          type="number"
+          class="form-control form-control-sm"
+          step="1"
+          id="invoice-number"
+          placeholder="1234..."
+          name="invoice-number"
+          value="{{form_data['invoice-number']}}"
+          onchange="setStatus()"
+          required
+        />
+      </div>
+      <div class="mb-2">
+          <label for="month" class="form-label">For The Month</label>
+          <div class="input-group">
+            <select
+            class="form-select form-select-sm"
+            aria-label="form-select-sm"
+            id="month"
+            name="month"
+            onchange="setStatus()"
+            required
+            >
+                {% for month in form_data['months'] %}
+                    <option
+                        value={{ loop.index }}
+                        {% if form_data['month']|int ==  loop.index %} selected {% endif %}
+                    >
+                        {{ month }}
+                    </option>
+                {% endfor %}
+            </select>
+            <select
+            class="form-select form-select-sm"
+            aria-label="form-select-sm"
+            id="year"
+            name="year"
+            onchange="setStatus()"
+            required
+            >
+                {% for year in form_data['years'] %}
+                    <option
+                        value={{ year }}
+                        {% if form_data['year']|int == year %} selected {% endif %}
+                    >
+                        {{ year }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+      </div>
+      <div class="d-grid gap-2">
+        <button class="btn btn-primary btn-lg" type="submit">
+          Preview
+        </button>
+        <a class="btn btn-success btn-sm" type="submit" href="{{url_for('download')}}">
+          Download
+        </a>
+        <a class="btn btn-secondary btn-sm" type="submit" href="{{url_for('save')}}">
+          Save
+        </a>
+        <button class="btn btn-secondary btn-sm" type="submit" disabled>
+          Email
+        </button>
+        <a class="btn btn-warning btn-sm" type="submit" href="{{url_for('synch')}}">
+          Synch with Clockify
+        </a>
+      </div>
+    </form>
+  </div>
+
+{% endblock %}
+
+{% block table %}
+    <span  class="side-element" id="invoice-table" style="display: none;">
+        <script>
+            function submitInvoiceForm(financialYear) {
+                document.getElementById('financial-year').value = financialYear;
+                document.getElementById('invoice-form').submit();
+            }
+        </script>
+        <div class="input-group mt-2">
+            <div class="input-group-prepend">
+                <span class="input-group-text">Financial Year</span>
+            </div>
+            <select
+                class="form-select form-select-sm"
+                aria-label="form-select-sm"
+                onchange="submitInvoiceForm(this.value)"
+                required
+            >
+                {% for year in form_data['years'] %}
+                    <option
+                        value={{ year }}
+                        {% if form_data['financial-year'] | int == year %} selected {% endif %}
+                    >
+                        {{ year | format_financial_year}}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover ">
+            <caption>{{ "$%.2f" | format(invoices_total) }}</caption>
+            <thead>
+                <tr>
+                <th></th>
+                <th>#</th>
+                <th>Month</th>
+                <th>Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for invoice in invoices %}
+                <tr>
+                    <td>
+                    <form action="{{ url_for('delete_invoice', invoice_id=invoice['invoice_id']) }}" method="POST">
+                        <button class="btn btn-sm btn-danger" type="submit">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-trash" viewBox="0 0 16 16">
+                            <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5Zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5Zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6Z"></path>
+                            <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1ZM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118ZM2.5 3h11V2h-11v1Z"></path>
+                        </svg>
+                        </button>
+                    </form>
+                    </td>
+                    <td>{{invoice.invoice_number}}</td>
+                    <td>{{invoice.period_start.strftime('%b %Y')}}</td>
+                    <td>{{ "$%.2f" | format(invoice.total) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            </table>
+        </div>
+    </span>
+{% endblock %}
+
+{% block invoice %}
+    <div class="invoice-box">
+        <svg id="invoice-status-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-check-circle-fill" viewBox="0 0 16 16" style="color: #0275d8; position: absolute; display:{{form_data['display-form']}};">
+            <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0m-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/>
+          </svg>
+        <table cellpadding="0" cellspacing="0">
+        <tr class="top">
+            <td colspan="5">
+            <table>
+                <tr>
+                <td class="title">
+                    <!-- <img src="https://www.sparksuite.com/images/logo.png" style="width: 100%; max-width: 300px" /> -->
+                    {{invoice['company'].name}}
+                </td>
+                <td>
+                    <b>Invoice #: {{invoice['invoice_number']}}</b><br />
+                    Date: {{invoice['invoice_date'] | format_date}}
+                </td>
+                </tr>
+            </table>
+            </td>
+        </tr>
+        <tr class="information">
+            <td colspan="5">
+            <table>
+                <tr>
+                <td>
+                    ABN: {{invoice['company'].abn}}<br />
+                    {{invoice['company'].email}}
+                </td>
+
+                <td>
+                    {{invoice['client'].contact}}<br />
+                    {{invoice['client'].name}}<br />
+                    {{invoice['client'].email}}
+                </td>
+                </tr>
+            </table>
+            </td>
+        </tr>
+        <tr class="details">
+            <td colspan="4">
+            For the period:<br />
+            {{invoice['period_start'] | format_date}} to
+            {{invoice['period_end'] | format_date}}
+            </td>
+            <td></td>
+        </tr>
+        <tr class="heading">
+            <td>Item</td>
+            <td>Description</td>
+            <td>Time Spent</td>
+            <td>Rate</td>
+            <td>Amount</td>
+        </tr>
+
+        {% for time_entry in invoice['time_entries'] %}
+        <tr class="item {% if loop.last %}last{% endif %}">
+            <td></td>
+            <td>{{time_entry.description}}</td>
+            <td>{{time_entry.duration_hours}}</td>
+            <td>{{time_entry.rate}}</td>
+            <td>${{time_entry.duration_hours * time_entry.rate}}</td>
+        </tr>
+        {% endfor %}
+
+        <tr class="total">
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td>Total: ${{invoice['total']}}</td>
+        </tr>
+        </table>
+    </div>
+
+{% endblock %}

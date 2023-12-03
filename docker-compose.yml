@@ -1,0 +1,11 @@
+services:
+  web:
+    build:
+      context: .
+    ports:
+      - 5000:5000
+    environment:
+      - CLOCKIFY_API_KEY
+      - CLOCKIFY_INVOICE_HOME=/invoices
+    volumes:
+      - /Users/jamos/dev/repos/clockify-invoice/invoices:/invoices

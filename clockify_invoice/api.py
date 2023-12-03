@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import http.client
 import json
-import os
 from json.decoder import JSONDecodeError
 from types import TracebackType
 from typing import Any
@@ -12,8 +11,8 @@ from typing import Literal
 class ClockifySession:
     API_BASE_ENDPOINT = "https://api.clockify.me/api/v1"
 
-    def __init__(self) -> None:
-        self.api_key = self.get_api_key()
+    def __init__(self, api_key: str) -> None:
+        self.api_key = api_key
         self.connection = http.client.HTTPSConnection("api.clockify.me")
         self.headers = {
             "X-Api-key": self.api_key,
@@ -31,17 +30,6 @@ class ClockifySession:
         exc_traceback: TracebackType | None,
     ) -> None:
         self.close()
-
-    @staticmethod
-    def get_api_key() -> str:
-        api_key = os.getenv("CLOCKIFY_API_KEY")
-        if api_key is None:
-            raise APIKeyMissingError(
-                "'CLOCKIFY_API_KEY' environment variable not set.\n"
-                "Connection to Clockify's API requires an API Key which can"
-                "be found in your user settings."
-            )
-        return api_key
 
     def close(self) -> None:
         self.connection.close()
@@ -89,10 +77,6 @@ class ClockifyClient:
 
 
 class ClockifyAPIException(Exception):
-    pass
-
-
-class APIKeyMissingError(Exception):
     pass
 
 
