@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Any
 from typing import Literal
 
+import dotenv
 import werkzeug.wrappers
 from flask import Flask
 from flask import redirect
@@ -30,6 +31,7 @@ logging.basicConfig(
 
 logger = logging.getLogger("clockify-invoice")
 app = Flask(__name__)
+dotenv.load_dotenv()
 app.config.from_prefixed_env()  # type: ignore
 
 # Constants
