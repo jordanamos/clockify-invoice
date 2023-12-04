@@ -189,8 +189,6 @@ def generate_invoice(
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    today = date.today()
-
     parser = argparse.ArgumentParser(description="Clockify Invoice Command Line Tool")
     parser.add_argument(
         "--debug",
@@ -225,14 +223,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--year",
         type=int,
-        default=today.year,
+        default=TODAY.year,
         metavar="INT",
         help="(%(default)s) set the invoice period year.",
     )
     parser.add_argument(
         "--month",
         type=int,
-        default=today.month,
+        default=TODAY.month,
         metavar="INT",
         choices=range(1, 13),
         help=" (%(default)s) set the invoice period month (%(choices)s)",
