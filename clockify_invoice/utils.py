@@ -40,7 +40,6 @@ def auth_required(func: Callable[..., Any]) -> Any:
             401,
             {"WWW-Authenticate": "Basic realm='Login Required!'"},
         )
-
     return wrapper
 
 

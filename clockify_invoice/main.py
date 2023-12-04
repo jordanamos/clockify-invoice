@@ -69,6 +69,7 @@ def save() -> werkzeug.wrappers.Response:
     invoice: Invoice = pickle.loads(session["invoice"])
     store: Store = app.config["store"]
     store.save_invoice(invoice)
+    session["active-tab"] = "form-tab"
     return redirect("/")
 
 
@@ -79,6 +80,7 @@ def download() -> werkzeug.wrappers.Response:
         return redirect("/")
     invoice: Invoice = pickle.loads(session["invoice"])
     pdf_bytes = invoice.pdf()
+    session["active-tab"] = "form-tab"
     return send_file(
         io.BytesIO(pdf_bytes),
         "application/pdf",

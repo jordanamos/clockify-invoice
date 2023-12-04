@@ -124,5 +124,5 @@ class Company:
 class Client:
     def __init__(self, name: str):
         self.name = name
-        self.contact = "John Scott"
         self.email = "john.scott@6cloudsystems.com"
+        self.contact = "John Scott"
