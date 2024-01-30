@@ -2,6 +2,7 @@ import argparse
 import calendar as cal
 import io
 import logging
+import os
 import pickle
 from collections.abc import Sequence
 from datetime import date
@@ -150,7 +151,7 @@ def synch() -> werkzeug.wrappers.Response:
     return redirect("/")
 
 
-def run_interactive(store: Store, host: str, port: int, debug: bool) -> int:
+def run_interactive(store: Store, host: str | None, port: int | None, debug: bool) -> int:
     app.config["store"] = store
     app.secret_key = get_api_key()
     app.run(host=host, port=port, debug=debug)
@@ -212,14 +213,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     parser.add_argument(
         "--host",
-        default="0.0.0.0",
         help=("(%(default)s) set the host to use when running in interactive mode."),
     )
     parser.add_argument(
         "--port",
         "-p",
         type=int,
-        default=5000,
         help=("(%(default)s) set the port to use when running in interactive mode."),
     )
     parser.add_argument(
