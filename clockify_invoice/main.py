@@ -154,7 +154,7 @@ def synch() -> werkzeug.wrappers.Response:
 def run_interactive(store: Store, host: str | None, port: int | None, debug: bool) -> int:
     app.config["store"] = store
     app.secret_key = get_api_key()
-    app.run(host=host, port=port, debug=debug)
+    app.run(host=host or app.config.get("HOST"), port=port or app.config.get("PORT"), debug=debug)
     return 0
 
 
