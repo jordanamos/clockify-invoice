@@ -28,10 +28,10 @@ logging.basicConfig(
     level=logging.INFO,
     format="[%(levelname)s] %(message)s",
 )
+dotenv.load_dotenv()
 
 logger = logging.getLogger("clockify-invoice")
 app = Flask(__name__)
-dotenv.load_dotenv()
 app.config.from_prefixed_env()  # type: ignore
 
 # Constants
