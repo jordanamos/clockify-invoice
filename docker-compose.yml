@@ -3,9 +3,8 @@ services:
     build:
       context: .
     ports:
-      - 5000:5000
-    environment:
-      - CLOCKIFY_API_KEY
-      - CLOCKIFY_INVOICE_HOME=/invoices
+      - 5673:5673
     volumes:
-      - /Users/jamos/dev/repos/clockify-invoice/invoices:/invoices
+      - /volume1/homes/Jordan/invoices:/invoices
+    env_file:
+      - .env
