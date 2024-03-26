@@ -36,8 +36,6 @@ RUN adduser \
     --uid "${UID}" \
     appuser
 
-RUN mkdir /invoicess
-
 WORKDIR /app
 
 # Copy the source code into the container.
