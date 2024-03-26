@@ -4,7 +4,6 @@ services:
       context: .
     ports:
       - 5673:5673
+    # host:container
     volumes:
-      - /volume1/homes/Jordan/invoices:/invoices
-    env_file:
-      - .env
+      - /Users/jamos/dev/repos/clockify-invoice/invoices:/invoices

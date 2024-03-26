@@ -1,6 +1,7 @@
 import base64
 import contextlib
 import datetime
+import json
 import logging
 import os
 import pickle
@@ -8,6 +9,8 @@ import sqlite3
 from collections.abc import Generator
 from typing import Any
 
+from clockify_invoice.invoice import Client
+from clockify_invoice.invoice import Company
 from clockify_invoice.invoice import Invoice
 from clockify_invoice.invoice import TimeEntry
 
@@ -40,20 +43,32 @@ WHERE id = ?
 """
 
 
+class ConfigError(Exception):
+    pass
+
+
 class Store:
     _DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
-    def __init__(self) -> None:
+    def __init__(self, config_file: str | None) -> None:
         self.directory = self._get_default_directory()
 
+        if not os.path.exists(self.directory):
+            os.makedirs(self.directory, exist_ok=True)
+            logger.debug(
+                f"Store directory '{self.directory}' did not exist so it was created"
+            )
         logger.debug(f"Using store directory: {self.directory}")
+
+        _config_file = config_file or os.path.join(
+            self.directory, "clockify-invoice-config.json"
+        )
 
         self.db_path = os.path.join(self.directory, "db.db")
         self._workspace_id = None
         self._user_id = None
-        if not os.path.exists(self.directory):
-            os.makedirs(self.directory, exist_ok=True)
-        self.create_db()
+        self._load_and_validate_config(_config_file)
+        self._create_db_if_not_exists()
 
     @staticmethod
     def _get_default_directory() -> str:
@@ -62,16 +77,74 @@ class Store:
             "clockify-invoice",
         )
 
-    @contextlib.contextmanager
-    def connect(
-        self, db_path: str | None = None
-    ) -> Generator[sqlite3.Connection, None, None]:
-        path = db_path if db_path is not None else self.db_path
-        with contextlib.closing(sqlite3.connect(path)) as db:
-            with db:
-                yield db
+    def _get_setting(
+        self,
+        setting: str,
+        default: Any | None = None,
+        required: bool = True,
+        config_override: dict[str, Any] | None = None,
+    ) -> Any:
+        _cfg = config_override or self._config
+        if not isinstance(_cfg, dict):
+            raise ConfigError(f"Invalid config: {_cfg}")
+        val = _cfg.get(setting, default)
+        if required and val is None:
+            raise ConfigError(f"Setting is required: {setting}")
+        return val
 
-    def create_db(self, db_path: str | None = None) -> None:
+    def _load_flask_settings(self) -> None:
+        _flask_settings = self._get_setting("flask", default={})
+        self.flask_user: str = self._get_setting(
+            "user", required=False, config_override=_flask_settings
+        )
+        self.flask_password: str = self._get_setting(
+            "password", required=False, config_override=_flask_settings
+        )
+        self.flask_host: str = self._get_setting(
+            "host", default="0.0.0.0", config_override=_flask_settings
+        )
+        try:
+            self.flask_port = int(
+                self._get_setting("port", default=5000, config_override=_flask_settings)
+            )
+        except ValueError as e:
+            raise ConfigError(f"Invalid flask port: {e}")
+
+    def _load_company_from_config(self) -> Company:
+        _company_settings = self._get_setting("company")
+        try:
+            rate = float(self._get_setting("rate", config_override=_company_settings))
+        except ValueError as e:
+            raise ConfigError(f"Invalid company rate: {e}")
+        else:
+            return Company(
+                self._get_setting("name", config_override=_company_settings),
+                self._get_setting("email", config_override=_company_settings),
+                self._get_setting("abn", config_override=_company_settings),
+                rate,
+            )
+
+    def _load_client_from_config(self) -> Client:
+        _client_settings = self._get_setting("client")
+        return Client(
+            self._get_setting("name", config_override=_client_settings),
+            self._get_setting("email", config_override=_client_settings),
+            self._get_setting("contact", config_override=_client_settings),
+        )
+
+    def _load_and_validate_config(self, config_path: str) -> None:
+        try:
+            with open(config_path) as f:
+                self._config: dict[str, Any] = json.load(f)
+        except (OSError, json.JSONDecodeError) as e:
+            raise ConfigError(f"Error in {config_path}: {e}")
+
+        self.api_key = self._get_setting("api_key", os.getenv("CLOCKIFY_API_KEY"))
+        self._load_flask_settings()
+        self.company = self._load_company_from_config()
+        self.client = self._load_client_from_config()
+
+    def _create_db_if_not_exists(self, db_path: str | None = None) -> None:
         with self.connect(db_path) as db:
             db.executescript(
                 """\
@@ -119,6 +192,15 @@ class Store:
                 """
             )
 
+    @contextlib.contextmanager
+    def connect(
+        self, db_path: str | None = None
+    ) -> Generator[sqlite3.Connection, None, None]:
+        path = db_path if db_path is not None else self.db_path
+        with contextlib.closing(sqlite3.connect(path)) as db:
+            with db:
+                yield db
+
     def delete_invoice(self, id: int) -> None:
         with self.connect() as db:
             db.execute(_DELETE_INVOICE_QUERY, (id,))
@@ -139,15 +221,13 @@ class Store:
             ).fetchall()
 
         entries: list[TimeEntry] = []
-
         for row in rows:
             date = datetime.datetime.strptime(row[0], self._DATE_FORMAT)
             description = str(row[1])
             duration_seconds = int(row[2])
             duration_hours = (round((duration_seconds / 3600) * 4) / 4) or 0.25
-            time_entry = TimeEntry(date, description, duration_hours, 70.0)
+            time_entry = TimeEntry(date, description, duration_hours, self.company.rate)
             entries.append(time_entry)
-
         return entries
 
     def save_invoice(self, invoice: Invoice) -> None:

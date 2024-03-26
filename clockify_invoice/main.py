@@ -2,7 +2,6 @@ import argparse
 import calendar as cal
 import io
 import logging
-import os
 import pickle
 from collections.abc import Sequence
 from datetime import date
@@ -10,7 +9,6 @@ from datetime import datetime
 from typing import Any
 from typing import Literal
 
-import dotenv
 import werkzeug.wrappers
 from flask import Flask
 from flask import redirect
@@ -19,9 +17,9 @@ from flask import send_file
 from flask import session
 
 from clockify_invoice.invoice import Invoice
+from clockify_invoice.store import ConfigError
 from clockify_invoice.store import Store
 from clockify_invoice.utils import auth_required
-from clockify_invoice.utils import get_api_key
 from clockify_invoice.utils import get_period_dates
 from clockify_invoice.utils import synch_with_clockify
 
@@ -29,16 +27,14 @@ logging.basicConfig(
     level=logging.INFO,
     format="[%(levelname)s] %(message)s",
 )
-dotenv.load_dotenv()
 
 logger = logging.getLogger("clockify-invoice")
 app = Flask(__name__)
-app.config.from_prefixed_env()  # type: ignore
 
 # Constants
 TODAY = date.today()
-YEARS = list(range(TODAY.year, TODAY.year - 5, -1))
-MONTHS = list(cal.month_name[1:])
+YEARS = tuple(range(TODAY.year, TODAY.year - 5, -1))
+MONTHS = tuple(cal.month_name[1:])
 
 
 @app.template_filter("format_financial_year")
@@ -100,7 +96,7 @@ def process_invoice() -> str:
         "years": YEARS,
         "month": TODAY.month,
         "year": TODAY.year,
-        "financial-year": TODAY.year,
+        "financial-year": TODAY.year - 1,
         "display-form": "block",
         "invoice-number": store.get_next_invoice_number(),
         "active-tab": session.get("active-tab") or "form-tab",
@@ -120,12 +116,10 @@ def process_invoice() -> str:
         invoice.period_start = period_start
         invoice.period_end = period_end
     else:
-        invoice_company = "Jordan Amos"
-        invoice_client = "6 Cloud Systems"
         invoice = Invoice(
             invoice_number,
-            invoice_company,
-            invoice_client,
+            store.company,
+            store.client,
             period_start,
             period_end,
         )
@@ -151,10 +145,10 @@ def synch() -> werkzeug.wrappers.Response:
     return redirect("/")
 
 
-def run_interactive(store: Store, host: str | None, port: int | None, debug: bool) -> int:
+def run_interactive(store: Store, debug: bool) -> int:
     app.config["store"] = store
-    app.secret_key = get_api_key()
-    app.run(host=host or app.config.get("HOST"), port=port or app.config.get("PORT"), debug=debug)
+    app.secret_key = store.api_key
+    app.run(host=store.flask_host, port=store.flask_port, debug=debug)
     return 0
 
 
@@ -171,23 +165,16 @@ def generate_invoice(
         return 1
 
     invoice_number = store.get_next_invoice_number()
-    invoice_company = "Jordan Amos"
-    invoice_client = "6 Cloud Systems"
-
     period_start, period_end = get_period_dates(year, month)
-
     invoice = Invoice(
         invoice_number,
-        invoice_company,
-        invoice_client,
+        store.company,
+        store.client,
         period_start,
         period_end,
     )
-
     invoice.time_entries = store.get_time_entries(period_start, period_end)
-
-    print(invoice.to_string())
-
+    invoice.pprint()
     return 0
 
 
@@ -197,8 +184,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--debug",
         "--verbose",
         "-v",
-        help="Show debug messaging",
+        help="show debug messaging",
         action="store_true",
+    )
+    parser.add_argument(
+        "-c",
+        "--config",
+        help="path to alternate config file",
     )
     parser.add_argument(
         "--synch",
@@ -212,21 +204,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="run a local server to create invoices interactively in the browser",
     )
     parser.add_argument(
-        "--host",
-        help=("(%(default)s) set the host to use when running in interactive mode."),
-    )
-    parser.add_argument(
-        "--port",
-        "-p",
-        type=int,
-        help=("(%(default)s) set the port to use when running in interactive mode."),
-    )
-    parser.add_argument(
         "--year",
         type=int,
         default=TODAY.year,
         metavar="INT",
-        help="(%(default)s) set the invoice period year.",
+        help="invoice period year (%(default)s) ",
     )
     parser.add_argument(
         "--month",
@@ -234,7 +216,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=TODAY.month,
         metavar="INT",
         choices=range(1, 13),
-        help=" (%(default)s) set the invoice period month (%(choices)s)",
+        help="invoice period month between 1-12 (%(default)s)",
     )
 
     args = parser.parse_args(argv)
@@ -242,13 +224,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.debug:
         logger.setLevel(logging.DEBUG)
 
-    store = Store()
+    try:
+        store = Store(args.config)
+    except ConfigError as e:
+        logger.error(e)
+        return 1
+
     ret = 0
     # First synch the db if the flag is set
     if args.synch:
         ret = synch_with_clockify(store)
     if args.interactive_mode:
-        ret |= run_interactive(store, args.host, args.port, args.debug)
+        ret |= run_interactive(store, args.debug)
     else:
         ret |= generate_invoice(store, args.year, args.month)
     return ret

@@ -21,18 +21,15 @@ from clockify_invoice.store import Store
 logger = logging.getLogger("clockify-invoice")
 
 
-class APIKeyMissingError(Exception):
-    pass
-
-
 def auth_required(func: Callable[..., Any]) -> Any:
     @functools.wraps(func)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         auth = request.authorization
-        if (
+        store: Store = current_app.config["store"]
+        if not (store.flask_user and store.flask_password) or (
             request.authorization
-            and auth.username == current_app.config["USER"]  # type: ignore
-            and auth.password == current_app.config["PASS"]  # type: ignore
+            and auth.username == store.flask_user  # type:ignore
+            and auth.password == store.flask_password  # type:ignore
         ):
             return func(*args, **kwargs)
         return make_response(
@@ -40,6 +37,7 @@ def auth_required(func: Callable[..., Any]) -> Any:
             401,
             {"WWW-Authenticate": "Basic realm='Login Required!'"},
         )
+
     return wrapper
 
 
@@ -49,18 +47,6 @@ def get_period_dates(start_year: int, start_month: int) -> tuple[date, date]:
     period_start = date(start_year, start_month, 1)
     period_end = date(end_year, end_month, 1)
     return period_start, period_end
-
-
-def get_api_key() -> str:
-    env_var = "CLOCKIFY_API_KEY"
-    api_key = os.getenv(env_var)
-    if api_key is None:
-        raise APIKeyMissingError(
-            "'CLOCKIFY_API_KEY' environment variable not set.\n"
-            "Connection to Clockify's API requires an API Key which can"
-            "be found in your user settings."
-        )
-    return api_key
 
 
 def synch_user(api_session: ClockifyClient, db: sqlite3.Connection) -> tuple[str, str]:
@@ -152,7 +138,7 @@ def synch_with_clockify(store: Store) -> int:
     try:
         store.clear_clockify_tables()
         with (
-            ClockifySession(get_api_key()) as session,
+            ClockifySession(store.api_key) as session,
             store.connect() as db,
         ):
             logger.info("Synching the local db with clockify...")

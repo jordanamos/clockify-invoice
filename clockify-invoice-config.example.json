@@ -1,21 +1,20 @@
 {
-    "api_key": "1234abc",
-    "home": "/Users/john/clockify-invoice",
+    "api_key": "NmViMDNlMjQtODY3OS00ODc0LTkzOTMtMDhmODAxZjcwOWJh",
     "flask": {
-        "user": "user",
-        "password": "password",
         "host": "0.0.0.0",
-        "port": 5000
+        "port": 5673,
+        "user": "",
+        "password": ""
     },
     "company": {
-        "name": "J Company",
-        "email": "j.company@email.com",
-        "abn": "123 456 789",
+        "name": "Jordan Amosss",
+        "email": "jordan.amos@gmail.com",
+        "abn": "47 436 539 044",
         "rate": 70.0
     },
     "client": {
-        "name": "Client",
-        "contact": "John Doe",
-        "email": "john.doe@email.com"
+        "name": "6 Cloud Systems",
+        "contact": "John Scott",
+        "email": "john.scott@6cloudsystems.com"
     }
 }

@@ -8,6 +8,13 @@ ENV PYTHONDONTWRITEBYTECODE=1
 # the application crashes without emitting any logs due to buffering.
 ENV PYTHONUNBUFFERED=1
 
+# The home directory for this app. This will be volume mounted in docker-compose.yml
+# and will also contain the config file
+ENV CLOCKIFY_INVOICE_HOME=/invoices
+# Optionally set the API key here or in the config file
+# Config file is preferred
+ENV CLOCKIFY_API_KEY=
+
 # Install weasyprint
 # https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#debian-11
 RUN : \
@@ -29,6 +36,8 @@ RUN adduser \
     --uid "${UID}" \
     appuser
 
+RUN mkdir /invoicess
+
 WORKDIR /app
 
 # Copy the source code into the container.
@@ -43,4 +52,4 @@ RUN python -m pip install . --no-cache-dir
 USER appuser
 
 # Run the application.
-CMD ["clockify-invoice", "--synch", "-i"]
+CMD ["clockify-invoice", "-v", "--synch",  "-i"]
