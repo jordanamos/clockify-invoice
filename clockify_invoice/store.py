@@ -104,15 +104,17 @@ class Store:
         _get_flask_setting = functools.partial(
             self._get_setting, config_override=_flask_settings
         )
+
+        app.config["FLASK_HOST"] = _get_flask_setting("host", default="0.0.0.0")
+        app.config["FLASK_USER"] = _get_flask_setting("user", required=False)
+        app.config["FLASK_PASSWORD"] = _get_flask_setting("password", required=False)
+
         try:
             app.config["FLASK_PORT"] = int(_get_flask_setting("port", default=5000))
             app.config["MAIL_PORT "] = int(_get_flask_setting("mail_port", default=25))
         except ValueError as e:
             raise ConfigError(f"Invalid flask port: {e}")
 
-        app.config["FLASK_HOST"] = _get_flask_setting("host", default="0.0.0.0")
-        app.config["FLASK_USER"] = _get_flask_setting("user", required=False)
-        app.config["FLASK_PASSWORD"] = _get_flask_setting("password", required=False)
         app.config["MAIL_SERVER"] = _get_flask_setting(
             "mail_server", default="localhost"
         )

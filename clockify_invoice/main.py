@@ -16,6 +16,7 @@ from flask import request
 from flask import send_file
 from flask import session
 from flask_mail import Mail
+from flask_mail import Message
 
 from clockify_invoice.invoice import Invoice
 from clockify_invoice.store import ConfigError
@@ -39,6 +40,7 @@ TODAY = date.today()
 YEARS = tuple(range(TODAY.year, TODAY.year - 5, -1))
 MONTHS = tuple(cal.month_name[1:])
 FLASK_CONFIG_STORE_KEY = "store"
+PDF_MIME_TYPE = "application/pdf"
 
 
 @app.template_filter("format_financial_year")
@@ -77,17 +79,37 @@ def save() -> werkzeug.wrappers.Response:
 @app.route("/download", methods=["GET"])
 @auth_required
 def download() -> werkzeug.wrappers.Response:
+    session["active-tab"] = "form-tab"
     if "invoice" not in session:
         return redirect("/")
     invoice: Invoice = pickle.loads(session["invoice"])
     pdf_bytes = invoice.pdf()
-    session["active-tab"] = "form-tab"
     return send_file(
         io.BytesIO(pdf_bytes),
-        "application/pdf",
+        PDF_MIME_TYPE,
         True,
         invoice.invoice_name,
     )
+
+
+@app.route("/email", methods=["GET"])
+@auth_required
+def email() -> werkzeug.wrappers.Response:
+    session["active-tab"] = "form-tab"
+    if "invoice" not in session:
+        return redirect("/")
+    invoice: Invoice = pickle.loads(session["invoice"])
+    pdf_bytes = invoice.pdf()
+    # "email": "john.scott@6cloudsystems.com"
+    msg = Message(
+        "Hello",
+        sender=invoice.company.email,
+        recipients=["jordan.amos@gmail.com"],
+        body="Hey there top g",
+    )
+    msg.attach(invoice.invoice_name, PDF_MIME_TYPE, pdf_bytes)
+    mail.send(msg)
+    return redirect("/")
 
 
 @app.route("/", methods=["GET", "POST"])
@@ -149,11 +171,12 @@ def synch() -> werkzeug.wrappers.Response:
     return redirect("/")
 
 
-def run_interactive(store: Store) -> int:
+def run_interactive(store: Store, debug: bool = False) -> int:
     app.secret_key = store.api_key
     app.config[FLASK_CONFIG_STORE_KEY] = store
     store.configure_flask_from_config(app)
-    app.run(host=app.config["FLASK_HOST"], port=app.config["FLASK_PORT"])
+    mail.init_app(app)
+    app.run(app.config["FLASK_HOST"], app.config["FLASK_PORT"], debug=debug)
     return 0
 
 
