@@ -9,6 +9,7 @@ import tabulate
 from flask import render_template
 from weasyprint import HTML
 
+
 class Invoice:
     """
     A Class representation of an Invoice with clockify line items
@@ -100,6 +101,7 @@ class Invoice:
             f"Total: {self.total}\n"
         )
 
+
 class TimeEntry(NamedTuple):
     date: datetime
     description: str
@@ -109,7 +111,8 @@ class TimeEntry(NamedTuple):
     @property
     def billable_amount(self) -> float:
         return self.duration_hours * self.rate
-    
+
+
 class Company(NamedTuple):
     name: str
     email: str
