@@ -4,7 +4,13 @@
         "host": "0.0.0.0",
         "port": 5000,
         "user": "",
-        "password": ""
+        "password": "",
+        "mail_server": "smtp.gmail.com",
+        "mail_port": 465,
+        "mail_username": "",
+        "mail_password": "",
+        "mail_use_tls": false,
+        "mail_use_ssl": true
     },
     "company": {
         "name": "Your Company",
