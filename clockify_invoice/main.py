@@ -15,6 +15,7 @@ from flask import redirect
 from flask import request
 from flask import send_file
 from flask import session
+from flask_mail import Mail
 
 from clockify_invoice.invoice import Invoice
 from clockify_invoice.store import ConfigError
@@ -29,12 +30,15 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger("clockify-invoice")
+
 app = Flask(__name__)
+mail = Mail()
 
 # Constants
 TODAY = date.today()
 YEARS = tuple(range(TODAY.year, TODAY.year - 5, -1))
 MONTHS = tuple(cal.month_name[1:])
+FLASK_CONFIG_STORE_KEY = "store"
 
 
 @app.template_filter("format_financial_year")
@@ -52,7 +56,7 @@ def format_date(value: date, format: str = "%d/%m/%Y") -> str:
 @app.route("/delete_invoice/<int:invoice_id>", methods=["POST"])
 @auth_required
 def delete_invoice(invoice_id: int) -> werkzeug.wrappers.Response:
-    store: Store = app.config["store"]
+    store: Store = app.config[FLASK_CONFIG_STORE_KEY]
     store.delete_invoice(invoice_id)
     session["active-tab"] = "table-tab"
     return redirect("/")
@@ -64,7 +68,7 @@ def save() -> werkzeug.wrappers.Response:
     if "invoice" not in session:
         return redirect("/")
     invoice: Invoice = pickle.loads(session["invoice"])
-    store: Store = app.config["store"]
+    store: Store = app.config[FLASK_CONFIG_STORE_KEY]
     store.save_invoice(invoice)
     session["active-tab"] = "form-tab"
     return redirect("/")
@@ -89,7 +93,7 @@ def download() -> werkzeug.wrappers.Response:
 @app.route("/", methods=["GET", "POST"])
 @auth_required
 def process_invoice() -> str:
-    store: Store = app.config["store"]
+    store: Store = app.config[FLASK_CONFIG_STORE_KEY]
 
     form_data: dict[str, Any] = {
         "months": MONTHS,
@@ -139,16 +143,17 @@ def process_invoice() -> str:
 @app.route("/synch", methods=["GET"])
 @auth_required
 def synch() -> werkzeug.wrappers.Response:
-    store = app.config["store"]
+    store = app.config[FLASK_CONFIG_STORE_KEY]
     synch_with_clockify(store)
     session["active-table"] = "form-tab"
     return redirect("/")
 
 
-def run_interactive(store: Store, debug: bool) -> int:
-    app.config["store"] = store
+def run_interactive(store: Store) -> int:
     app.secret_key = store.api_key
-    app.run(host=store.flask_host, port=store.flask_port, debug=debug)
+    app.config[FLASK_CONFIG_STORE_KEY] = store
+    store.configure_flask_from_config(app)
+    app.run(host=app.config["FLASK_HOST"], port=app.config["FLASK_PORT"])
     return 0
 
 
@@ -235,7 +240,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.synch:
         ret = synch_with_clockify(store)
     if args.interactive_mode:
-        ret |= run_interactive(store, args.debug)
+        ret |= run_interactive(store)
     else:
         ret |= generate_invoice(store, args.year, args.month)
     return ret

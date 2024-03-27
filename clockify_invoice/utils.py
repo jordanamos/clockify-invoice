@@ -25,11 +25,12 @@ def auth_required(func: Callable[..., Any]) -> Any:
     @functools.wraps(func)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         auth = request.authorization
-        store: Store = current_app.config["store"]
-        if not (store.flask_user and store.flask_password) or (
+        if not (
+            current_app.config["FLASK_USER"] and current_app.config["FLASK_PASSWORD"]
+        ) or (
             request.authorization
-            and auth.username == store.flask_user  # type:ignore
-            and auth.password == store.flask_password  # type:ignore
+            and auth.username == current_app.config["FLASK_USER"]  # type:ignore
+            and auth.password == current_app.config["FLASK_PASSWORD"]  # type:ignore
         ):
             return func(*args, **kwargs)
         return make_response(

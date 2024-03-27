@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import base64
 import contextlib
 import datetime
+import functools
 import json
 import logging
 import os
@@ -8,11 +11,15 @@ import pickle
 import sqlite3
 from collections.abc import Generator
 from typing import Any
+from typing import TYPE_CHECKING
 
 from clockify_invoice.invoice import Client
 from clockify_invoice.invoice import Company
 from clockify_invoice.invoice import Invoice
 from clockify_invoice.invoice import TimeEntry
+
+if TYPE_CHECKING:
+    from flask import Flask
 
 logger = logging.getLogger("clockify-invoice")
 
@@ -92,44 +99,58 @@ class Store:
             raise ConfigError(f"Setting is required: {setting}")
         return val
 
-    def _load_flask_settings(self) -> None:
+    def configure_flask_from_config(self, app: Flask) -> None:
         _flask_settings = self._get_setting("flask", default={})
-        self.flask_user: str = self._get_setting(
-            "user", required=False, config_override=_flask_settings
-        )
-        self.flask_password: str = self._get_setting(
-            "password", required=False, config_override=_flask_settings
-        )
-        self.flask_host: str = self._get_setting(
-            "host", default="0.0.0.0", config_override=_flask_settings
+        _get_flask_setting = functools.partial(
+            self._get_setting, config_override=_flask_settings
         )
         try:
-            self.flask_port = int(
-                self._get_setting("port", default=5000, config_override=_flask_settings)
-            )
+            app.config["FLASK_PORT"] = int(_get_flask_setting("port", default=5000))
+            app.config["MAIL_PORT "] = int(_get_flask_setting("mail_port", default=25))
         except ValueError as e:
             raise ConfigError(f"Invalid flask port: {e}")
 
+        app.config["FLASK_HOST"] = _get_flask_setting("host", default="0.0.0.0")
+        app.config["FLASK_USER"] = _get_flask_setting("user", required=False)
+        app.config["FLASK_PASSWORD"] = _get_flask_setting("password", required=False)
+        app.config["MAIL_SERVER"] = _get_flask_setting(
+            "mail_server", default="localhost"
+        )
+        app.config["MAIL_USERNAME "] = _get_flask_setting(
+            "mail_username", required=False
+        )
+        app.config["MAIL_PASSWORD "] = _get_flask_setting(
+            "mail_password", required=False
+        )
+        app.config["MAIL_USE_SSL"] = _get_flask_setting("mail_use_ssl", default=False)
+        app.config["MAIL_USE_TLS"] = _get_flask_setting("mail_use_tls", default=False)
+
     def _load_company_from_config(self) -> Company:
         _company_settings = self._get_setting("company")
+        _get_company_setting = functools.partial(
+            self._get_setting, config_override=_company_settings
+        )
         try:
-            rate = float(self._get_setting("rate", config_override=_company_settings))
+            rate = float(_get_company_setting("rate"))
         except ValueError as e:
             raise ConfigError(f"Invalid company rate: {e}")
         else:
             return Company(
-                self._get_setting("name", config_override=_company_settings),
-                self._get_setting("email", config_override=_company_settings),
-                self._get_setting("abn", config_override=_company_settings),
+                _get_company_setting("name"),
+                _get_company_setting("email"),
+                _get_company_setting("abn"),
                 rate,
             )
 
     def _load_client_from_config(self) -> Client:
         _client_settings = self._get_setting("client")
+        _get_client_setting = functools.partial(
+            self._get_setting, config_override=_client_settings
+        )
         return Client(
-            self._get_setting("name", config_override=_client_settings),
-            self._get_setting("email", config_override=_client_settings),
-            self._get_setting("contact", config_override=_client_settings),
+            _get_client_setting("name"),
+            _get_client_setting("email"),
+            _get_client_setting("contact"),
         )
 
     def _load_and_validate_config(self, config_path: str) -> None:
@@ -138,9 +159,7 @@ class Store:
                 self._config: dict[str, Any] = json.load(f)
         except (OSError, json.JSONDecodeError) as e:
             raise ConfigError(f"Error in {config_path}: {e}")
-
         self.api_key = self._get_setting("api_key", os.getenv("CLOCKIFY_API_KEY"))
-        self._load_flask_settings()
         self.company = self._load_company_from_config()
         self.client = self._load_client_from_config()
 
