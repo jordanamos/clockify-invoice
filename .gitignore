@@ -1,8 +1,8 @@
 __pycache__/
 .DS_Store
-.pdf
 .pytest_cache/
 .python-version
 *.egg-info
 .mypy_cache
-build/*
+build/
+invoices/

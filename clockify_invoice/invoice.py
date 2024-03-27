@@ -10,17 +10,6 @@ from flask import render_template
 from weasyprint import HTML
 
 
-class TimeEntry(NamedTuple):
-    date: datetime
-    description: str
-    duration_hours: float
-    rate: float
-
-    @property
-    def billable_amount(self) -> float:
-        return self.duration_hours * self.rate
-
-
 class Invoice:
     """
     A Class representation of an Invoice with clockify line items
@@ -29,16 +18,16 @@ class Invoice:
     def __init__(
         self,
         invoice_number: int,
-        company_name: str,
-        client_name: str,
+        company: Company,
+        client: Client,
         period_start: date,
         period_end: date,
         invoice_date: date = date.today(),
     ) -> None:
         self.invoice_date = invoice_date
         self.invoice_number = invoice_number
-        self.company = Company(company_name)
-        self.client = Client(client_name)
+        self.company = company
+        self.client = client
         self.period_start = period_start
         self.period_end = period_end
         self._time_entries: list[TimeEntry] = []
@@ -81,15 +70,15 @@ class Invoice:
         return {
             "invoice_number": self.invoice_number,
             "invoice_date": self.invoice_date,
-            "company": self.company.__dict__,
-            "client": self.client.__dict__,
+            "company": self.company._asdict(),
+            "client": self.client._asdict(),
             "period_start": self.period_start,
             "period_end": self.period_end,
             "time_entries": [entry._asdict() for entry in self.time_entries],
             "total": self.total,
         }
 
-    def to_string(self) -> str:
+    def pprint(self) -> None:
         table_data = [
             (
                 datetime.strftime(entry.date, "%d/%m/%Y"),
@@ -102,7 +91,7 @@ class Invoice:
         ]
         headers = ["Date", "Description", "Time Spent", "Rate", "Amount"]
         table_str = tabulate.tabulate(table_data, headers=headers)
-        return (
+        print(
             f"Invoice #: {self.invoice_number}\n"
             f"Invoice Date: {self.invoice_date}\n"
             f"Payee: {self.company.name}\n"
@@ -113,16 +102,25 @@ class Invoice:
         )
 
 
-class Company:
-    def __init__(self, name: str):
-        self.name = name
-        self.email = "jordan.amos@gmail.com"
-        self.abn = "47 436 539 044"
-        self.rate = 70.00
+class TimeEntry(NamedTuple):
+    date: datetime
+    description: str
+    duration_hours: float
+    rate: float
+
+    @property
+    def billable_amount(self) -> float:
+        return self.duration_hours * self.rate
 
 
-class Client:
-    def __init__(self, name: str):
-        self.name = name
-        self.email = "john.scott@6cloudsystems.com"
-        self.contact = "John Scott"
+class Company(NamedTuple):
+    name: str
+    email: str
+    abn: str
+    rate: float
+
+
+class Client(NamedTuple):
+    name: str
+    email: str
+    contact: str
