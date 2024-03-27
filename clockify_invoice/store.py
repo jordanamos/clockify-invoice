@@ -3,23 +3,16 @@ from __future__ import annotations
 import base64
 import contextlib
 import datetime
-import functools
-import json
 import logging
 import os
 import pickle
 import sqlite3
 from collections.abc import Generator
 from typing import Any
-from typing import TYPE_CHECKING
 
-from clockify_invoice.invoice import Client
-from clockify_invoice.invoice import Company
+from clockify_invoice.config import Config
 from clockify_invoice.invoice import Invoice
 from clockify_invoice.invoice import TimeEntry
-
-if TYPE_CHECKING:
-    from flask import Flask
 
 logger = logging.getLogger("clockify-invoice")
 
@@ -50,31 +43,24 @@ WHERE id = ?
 """
 
 
-class ConfigError(Exception):
-    pass
-
-
 class Store:
     _DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
-    def __init__(self, config_file: str | None) -> None:
+    def __init__(self, config_file: str | None = None) -> None:
         self.directory = self._get_default_directory()
-
         if not os.path.exists(self.directory):
             os.makedirs(self.directory, exist_ok=True)
             logger.debug(
                 f"Store directory '{self.directory}' did not exist so it was created"
             )
         logger.debug(f"Using store directory: {self.directory}")
-
-        _config_file = config_file or os.path.join(
+        config_file = config_file or os.path.join(
             self.directory, "clockify-invoice-config.json"
         )
-
         self.db_path = os.path.join(self.directory, "db.db")
+        self.config = Config(config_file)
         self._workspace_id = None
         self._user_id = None
-        self._load_and_validate_config(_config_file)
         self._create_db_if_not_exists()
 
     @staticmethod
@@ -83,87 +69,6 @@ class Store:
             os.path.expanduser("~"),
             "clockify-invoice",
         )
-
-    def _get_setting(
-        self,
-        setting: str,
-        default: Any | None = None,
-        required: bool = True,
-        config_override: dict[str, Any] | None = None,
-    ) -> Any:
-        _cfg = config_override or self._config
-        if not isinstance(_cfg, dict):
-            raise ConfigError(f"Invalid config: {_cfg}")
-        val = _cfg.get(setting, default)
-        if required and val is None:
-            raise ConfigError(f"Setting is required: {setting}")
-        return val
-
-    def configure_flask_from_config(self, app: Flask) -> None:
-        _flask_settings = self._get_setting("flask", default={})
-        _get_flask_setting = functools.partial(
-            self._get_setting, config_override=_flask_settings
-        )
-
-        app.config["FLASK_HOST"] = _get_flask_setting("host", default="0.0.0.0")
-        app.config["FLASK_USER"] = _get_flask_setting("user", required=False)
-        app.config["FLASK_PASSWORD"] = _get_flask_setting("password", required=False)
-
-        try:
-            app.config["FLASK_PORT"] = int(_get_flask_setting("port", default=5000))
-            app.config["MAIL_PORT "] = int(_get_flask_setting("mail_port", default=25))
-        except ValueError as e:
-            raise ConfigError(f"Invalid flask port: {e}")
-
-        app.config["MAIL_SERVER"] = _get_flask_setting(
-            "mail_server", default="localhost"
-        )
-        app.config["MAIL_USERNAME "] = _get_flask_setting(
-            "mail_username", required=False
-        )
-        app.config["MAIL_PASSWORD "] = _get_flask_setting(
-            "mail_password", required=False
-        )
-        app.config["MAIL_USE_SSL"] = _get_flask_setting("mail_use_ssl", default=False)
-        app.config["MAIL_USE_TLS"] = _get_flask_setting("mail_use_tls", default=False)
-
-    def _load_company_from_config(self) -> Company:
-        _company_settings = self._get_setting("company")
-        _get_company_setting = functools.partial(
-            self._get_setting, config_override=_company_settings
-        )
-        try:
-            rate = float(_get_company_setting("rate"))
-        except ValueError as e:
-            raise ConfigError(f"Invalid company rate: {e}")
-        else:
-            return Company(
-                _get_company_setting("name"),
-                _get_company_setting("email"),
-                _get_company_setting("abn"),
-                rate,
-            )
-
-    def _load_client_from_config(self) -> Client:
-        _client_settings = self._get_setting("client")
-        _get_client_setting = functools.partial(
-            self._get_setting, config_override=_client_settings
-        )
-        return Client(
-            _get_client_setting("name"),
-            _get_client_setting("email"),
-            _get_client_setting("contact"),
-        )
-
-    def _load_and_validate_config(self, config_path: str) -> None:
-        try:
-            with open(config_path) as f:
-                self._config: dict[str, Any] = json.load(f)
-        except (OSError, json.JSONDecodeError) as e:
-            raise ConfigError(f"Error in {config_path}: {e}")
-        self.api_key = self._get_setting("api_key", os.getenv("CLOCKIFY_API_KEY"))
-        self.company = self._load_company_from_config()
-        self.client = self._load_client_from_config()
 
     def _create_db_if_not_exists(self, db_path: str | None = None) -> None:
         with self.connect(db_path) as db:
@@ -247,7 +152,9 @@ class Store:
             description = str(row[1])
             duration_seconds = int(row[2])
             duration_hours = (round((duration_seconds / 3600) * 4) / 4) or 0.25
-            time_entry = TimeEntry(date, description, duration_hours, self.company.rate)
+            time_entry = TimeEntry(
+                date, description, duration_hours, self.config.COMPANY.rate
+            )
             entries.append(time_entry)
         return entries
 

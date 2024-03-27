@@ -15,11 +15,9 @@ from flask import redirect
 from flask import request
 from flask import send_file
 from flask import session
-from flask_mail import Mail
-from flask_mail import Message
 
+from clockify_invoice.config import ConfigError
 from clockify_invoice.invoice import Invoice
-from clockify_invoice.store import ConfigError
 from clockify_invoice.store import Store
 from clockify_invoice.utils import auth_required
 from clockify_invoice.utils import get_period_dates
@@ -33,7 +31,6 @@ logging.basicConfig(
 logger = logging.getLogger("clockify-invoice")
 
 app = Flask(__name__)
-mail = Mail()
 
 # Constants
 TODAY = date.today()
@@ -98,17 +95,10 @@ def email() -> werkzeug.wrappers.Response:
     session["active-tab"] = "form-tab"
     if "invoice" not in session:
         return redirect("/")
+    store: Store = app.config[FLASK_CONFIG_STORE_KEY]
     invoice: Invoice = pickle.loads(session["invoice"])
-    pdf_bytes = invoice.pdf()
-    # "email": "john.scott@6cloudsystems.com"
-    msg = Message(
-        "Hello",
-        sender=invoice.company.email,
-        recipients=["jordan.amos@gmail.com"],
-        body="Hey there top g",
-    )
-    msg.attach(invoice.invoice_name, PDF_MIME_TYPE, pdf_bytes)
-    mail.send(msg)
+    email = invoice.prepare_email(store.config)
+    email.send()
     return redirect("/")
 
 
@@ -116,7 +106,6 @@ def email() -> werkzeug.wrappers.Response:
 @auth_required
 def process_invoice() -> str:
     store: Store = app.config[FLASK_CONFIG_STORE_KEY]
-
     form_data: dict[str, Any] = {
         "months": MONTHS,
         "years": YEARS,
@@ -144,8 +133,8 @@ def process_invoice() -> str:
     else:
         invoice = Invoice(
             invoice_number,
-            store.company,
-            store.client,
+            store.config.COMPANY,
+            store.config.CLIENT,
             period_start,
             period_end,
         )
@@ -172,11 +161,9 @@ def synch() -> werkzeug.wrappers.Response:
 
 
 def run_interactive(store: Store, debug: bool = False) -> int:
-    app.secret_key = store.api_key
+    app.secret_key = store.config.API_KEY
     app.config[FLASK_CONFIG_STORE_KEY] = store
-    store.configure_flask_from_config(app)
-    mail.init_app(app)
-    app.run(app.config["FLASK_HOST"], app.config["FLASK_PORT"], debug=debug)
+    app.run(store.config.FLASK_HOST, store.config.FLASK_PORT, debug=debug)
     return 0
 
 
@@ -196,8 +183,8 @@ def generate_invoice(
     period_start, period_end = get_period_dates(year, month)
     invoice = Invoice(
         invoice_number,
-        store.company,
-        store.client,
+        store.config.COMPANY,
+        store.config.CLIENT,
         period_start,
         period_end,
     )

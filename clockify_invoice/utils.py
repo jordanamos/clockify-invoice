@@ -25,12 +25,12 @@ def auth_required(func: Callable[..., Any]) -> Any:
     @functools.wraps(func)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         auth = request.authorization
-        if not (
-            current_app.config["FLASK_USER"] and current_app.config["FLASK_PASSWORD"]
-        ) or (
+        store: Store = current_app.config["store"]
+
+        if not (store.config.FLASK_USER and store.config.FLASK_PASSWORD) or (
             request.authorization
-            and auth.username == current_app.config["FLASK_USER"]  # type:ignore
-            and auth.password == current_app.config["FLASK_PASSWORD"]  # type:ignore
+            and auth.username == store.config.FLASK_USER  # type:ignore
+            and auth.password == store.config.FLASK_PASSWORD  # type:ignore
         ):
             return func(*args, **kwargs)
         return make_response(
@@ -139,7 +139,7 @@ def synch_with_clockify(store: Store) -> int:
     try:
         store.clear_clockify_tables()
         with (
-            ClockifySession(store.api_key) as session,
+            ClockifySession(store.config.API_KEY) as session,
             store.connect() as db,
         ):
             logger.info("Synching the local db with clockify...")
