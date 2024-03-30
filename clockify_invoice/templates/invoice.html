@@ -163,7 +163,6 @@
             <table>
                 <tr>
                 <td class="title">
-                    <!-- <img src="https://www.sparksuite.com/images/logo.png" style="width: 100%; max-width: 300px" /> -->
                     {{invoice['company'].name}}
                 </td>
                 <td>
@@ -176,19 +175,19 @@
         </tr>
         <tr class="information">
             <td colspan="5">
-            <table>
-                <tr>
-                <td>
-                    ABN: {{invoice['company'].abn}}<br />
-                    {{invoice['company'].email}}
-                </td>
-                <td>
-                    {{invoice['client'].contact}}<br />
-                    {{invoice['client'].name}}<br />
-                    {{invoice['client'].email}}
-                </td>
-                </tr>
-            </table>
+                <table>
+                    <tr>
+                        <td>
+                            ABN: {{invoice['company'].abn}}<br />
+                            {{invoice['company'].email}}
+                        </td>
+                        <td>
+                            {{invoice['client'].contact}}<br />
+                            {{invoice['client'].name}}<br />
+                            {{invoice['client'].email}}
+                        </td>
+                    </tr>
+                </table>
             </td>
         </tr>
         <tr class="details">
@@ -208,15 +207,14 @@
         </tr>
 
         {% for time_entry in invoice['time_entries'] %}
-        <tr class="item {% if loop.last %}last{% endif %}">
-            <td></td>
-            <td>{{time_entry.description}}</td>
-            <td>{{time_entry.duration_hours}}</td>
-            <td>{{time_entry.rate}}</td>
-            <td>${{time_entry.duration_hours * time_entry.rate}}</td>
-        </tr>
+            <tr class="item {% if loop.last %}last{% endif %}">
+                <td></td>
+                <td>{{time_entry.description}}</td>
+                <td>{{time_entry.duration_hours}}</td>
+                <td>{{time_entry.rate}}</td>
+                <td>${{time_entry.duration_hours * time_entry.rate}}</td>
+            </tr>
         {% endfor %}
-
         <tr class="total">
             <td></td>
             <td></td>
@@ -226,5 +224,4 @@
         </tr>
         </table>
     </div>
-
 {% endblock %}
