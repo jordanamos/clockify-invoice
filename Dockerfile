@@ -44,6 +44,10 @@ COPY setup.cfg .
 COPY README.md .
 RUN python -m pip install . --no-cache-dir
 
+# Grant privileges to the appuser to the /invoices directory
+RUN mkdir /invoices
+RUN chown appuser: /invoices
+RUN chmod 700 /invoices
 # Switch to the non-privileged user to run the application.
 USER appuser
 
