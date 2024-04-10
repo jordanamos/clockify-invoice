@@ -6,4 +6,5 @@ services:
       - 5000:5000
       - 465:465
     volumes:
-      - /path/to/your/clockify/invoice/home:/invoices
+      - ${CLOCKIFY_INVOICE_HOME}/clockify-invoice-config.json:/invoices/clockify-invoice-config.json
+      - ${CLOCKIFY_INVOICE_HOME}/db.db:/invoices/db.db

@@ -42,7 +42,6 @@ COPY clockify_invoice clockify_invoice
 COPY setup.py .
 COPY setup.cfg .
 COPY README.md .
-
 RUN python -m pip install . --no-cache-dir
 
 # Switch to the non-privileged user to run the application.

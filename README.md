@@ -37,7 +37,11 @@ pip install clockify-invoice
     git clone git@github.com:jordanamos/clockify-invoice.git
     ```
 2. Follow steps 1-3 in `Setup`
-3. Edit docker-compose.yml to expose the same flask and mail ports in the config file (5000 and 465 by default). Also update docker-compose.yml volumes to mount your local CLOCKIFY_INVOICE_HOME directory with a /invoices folder within the container (this should be the same as the CLOCKIFY_INVOICE_HOME environment variable value that is defined in the Dockerfile)
+3. Edit docker-compose.yml to expose the same flask and mail ports in the config file (5000 and 465 by default).
+4. Replace ${CLOCKIFY_INVOICE_HOME} in the docker-compose.yml file with your actual value of the enrivonment variable set in step 1.
+    ```
+    echo $CLOCKIFY_INVOICE_HOME
+    ```
 4. Build and run the contianer
     ```
     docker-compose up --build
