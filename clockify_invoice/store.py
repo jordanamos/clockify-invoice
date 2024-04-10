@@ -42,26 +42,70 @@ FROM INVOICE
 WHERE id = ?
 """
 
+_SAMPLE_CONFIG = """\
+{
+    "api_key": "",
+    "flask": {
+        "host": "0.0.0.0",
+        "port": 5000,
+        "user": "",
+        "password": ""
+
+    },
+    "mail": {
+        "server": "smtp.gmail.com",
+        "port": 465,
+        "username": "",
+        "password": "",
+        "use_tls": false,
+        "use_ssl": true
+    },
+    "company": {
+        "name": "Your Company",
+        "email": "your.email@gmail.com",
+        "abn": "123 456 789",
+        "rate": 70.0
+    },
+    "client": {
+        "contact": "Ben Howard",
+        "name": "Your Client",
+        "email": "client.email@gmail.com"
+    }
+}
+"""
+
 
 class Store:
     _DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
     def __init__(self, config_file: str | None = None) -> None:
         self.directory = self._get_default_directory()
-        if not os.path.exists(self.directory):
-            os.makedirs(self.directory, exist_ok=True)
-            logger.debug(
-                f"Store directory '{self.directory}' did not exist so it was created"
-            )
-        logger.debug(f"Using store directory: {self.directory}")
         config_file = config_file or os.path.join(
             self.directory, "clockify-invoice-config.json"
         )
+        self._initialise(config_file)
         self.db_path = os.path.join(self.directory, "db.db")
         self.config = Config(config_file)
         self._workspace_id = None
         self._user_id = None
         self._create_db_if_not_exists()
+
+    def _initialise(self, config_file: str) -> None:
+        if not os.path.exists(self.directory):
+            os.makedirs(self.directory, exist_ok=True)
+            logger.info(
+                f"Store directory '{self.directory}' did not exist so it was created"
+            )
+            if not os.path.exists(config_file):
+                with open(
+                    config_file,
+                    "w",
+                ) as f:
+                    f.write(_SAMPLE_CONFIG)
+                    logger.info(
+                        f"Config file '{config_file}' did not exist so it was created"
+                    )
+        logger.debug(f"Using store directory: {self.directory}")
 
     @staticmethod
     def _get_default_directory() -> str:

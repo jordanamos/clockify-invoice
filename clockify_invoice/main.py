@@ -175,7 +175,7 @@ def generate_invoice(
     if not (workspace_id and user_id):
         logger.error(
             f"Unable to generate invoice: Invalid User ({user_id}) or "
-            f"Workspace ({workspace_id})"
+            f"Workspace ({workspace_id}). Try running --synch first."
         )
         return 1
 

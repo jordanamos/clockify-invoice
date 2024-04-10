@@ -3,7 +3,7 @@ services:
     build:
       context: .
     ports:
-      - 5673:5673
-    # host:container
+      - 5000:5000
+      - 465:465
     volumes:
-      - /Users/jamos/dev/repos/clockify-invoice/invoices:/invoices
+      - /path/to/your/clockify/invoice/home:/invoices

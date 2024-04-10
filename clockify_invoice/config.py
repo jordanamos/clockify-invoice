@@ -21,7 +21,7 @@ class Config:
         except (OSError, json.JSONDecodeError) as e:
             raise ConfigError(f"Error in {config_file}: {e}")
 
-        self.API_KEY = self._get_setting("api_key", os.getenv("CLOCKIFY_API_KEY"))
+        self.API_KEY = self._get_setting("api_key", os.getenv("CLOCKIFY_API_KEY"), True)
         self.COMPANY = self._load_company_from_config()
         self.CLIENT = self._load_client_from_config()
         self._load_flask_config()
@@ -38,7 +38,7 @@ class Config:
         if not isinstance(_cfg, dict):
             raise ConfigError(f"Invalid config: {_cfg}")
         val = _cfg.get(setting, default)
-        if required and val is None:
+        if required and (val is None or (isinstance(val, str) and len(val) == 0)):
             raise ConfigError(f"Setting is required: {setting}")
         return val
 
