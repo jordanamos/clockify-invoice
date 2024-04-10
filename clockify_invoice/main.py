@@ -16,8 +16,8 @@ from flask import request
 from flask import send_file
 from flask import session
 
+from clockify_invoice.config import ConfigError
 from clockify_invoice.invoice import Invoice
-from clockify_invoice.store import ConfigError
 from clockify_invoice.store import Store
 from clockify_invoice.utils import auth_required
 from clockify_invoice.utils import get_period_dates
@@ -29,12 +29,15 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger("clockify-invoice")
+
 app = Flask(__name__)
 
 # Constants
 TODAY = date.today()
 YEARS = tuple(range(TODAY.year, TODAY.year - 5, -1))
 MONTHS = tuple(cal.month_name[1:])
+FLASK_CONFIG_STORE_KEY = "store"
+PDF_MIME_TYPE = "application/pdf"
 
 
 @app.template_filter("format_financial_year")
@@ -52,7 +55,7 @@ def format_date(value: date, format: str = "%d/%m/%Y") -> str:
 @app.route("/delete_invoice/<int:invoice_id>", methods=["POST"])
 @auth_required
 def delete_invoice(invoice_id: int) -> werkzeug.wrappers.Response:
-    store: Store = app.config["store"]
+    store: Store = app.config[FLASK_CONFIG_STORE_KEY]
     store.delete_invoice(invoice_id)
     session["active-tab"] = "table-tab"
     return redirect("/")
@@ -64,7 +67,7 @@ def save() -> werkzeug.wrappers.Response:
     if "invoice" not in session:
         return redirect("/")
     invoice: Invoice = pickle.loads(session["invoice"])
-    store: Store = app.config["store"]
+    store: Store = app.config[FLASK_CONFIG_STORE_KEY]
     store.save_invoice(invoice)
     session["active-tab"] = "form-tab"
     return redirect("/")
@@ -73,24 +76,36 @@ def save() -> werkzeug.wrappers.Response:
 @app.route("/download", methods=["GET"])
 @auth_required
 def download() -> werkzeug.wrappers.Response:
+    session["active-tab"] = "form-tab"
     if "invoice" not in session:
         return redirect("/")
     invoice: Invoice = pickle.loads(session["invoice"])
     pdf_bytes = invoice.pdf()
-    session["active-tab"] = "form-tab"
     return send_file(
         io.BytesIO(pdf_bytes),
-        "application/pdf",
+        PDF_MIME_TYPE,
         True,
         invoice.invoice_name,
     )
 
 
+@app.route("/email", methods=["GET"])
+@auth_required
+def email() -> werkzeug.wrappers.Response:
+    session["active-tab"] = "form-tab"
+    if "invoice" not in session:
+        return redirect("/")
+    store: Store = app.config[FLASK_CONFIG_STORE_KEY]
+    invoice: Invoice = pickle.loads(session["invoice"])
+    email = invoice.prepare_email(store.config)
+    email.send()
+    return redirect("/")
+
+
 @app.route("/", methods=["GET", "POST"])
 @auth_required
 def process_invoice() -> str:
-    store: Store = app.config["store"]
-
+    store: Store = app.config[FLASK_CONFIG_STORE_KEY]
     form_data: dict[str, Any] = {
         "months": MONTHS,
         "years": YEARS,
@@ -118,8 +133,8 @@ def process_invoice() -> str:
     else:
         invoice = Invoice(
             invoice_number,
-            store.company,
-            store.client,
+            store.config.COMPANY,
+            store.config.CLIENT,
             period_start,
             period_end,
         )
@@ -139,16 +154,16 @@ def process_invoice() -> str:
 @app.route("/synch", methods=["GET"])
 @auth_required
 def synch() -> werkzeug.wrappers.Response:
-    store = app.config["store"]
+    store = app.config[FLASK_CONFIG_STORE_KEY]
     synch_with_clockify(store)
     session["active-table"] = "form-tab"
     return redirect("/")
 
 
-def run_interactive(store: Store, debug: bool) -> int:
-    app.config["store"] = store
-    app.secret_key = store.api_key
-    app.run(host=store.flask_host, port=store.flask_port, debug=debug)
+def run_interactive(store: Store, debug: bool = False) -> int:
+    app.secret_key = store.config.API_KEY
+    app.config[FLASK_CONFIG_STORE_KEY] = store
+    app.run(store.config.FLASK_HOST, store.config.FLASK_PORT, debug=debug)
     return 0
 
 
@@ -160,7 +175,7 @@ def generate_invoice(
     if not (workspace_id and user_id):
         logger.error(
             f"Unable to generate invoice: Invalid User ({user_id}) or "
-            f"Workspace ({workspace_id})"
+            f"Workspace ({workspace_id}). Try running --synch first."
         )
         return 1
 
@@ -168,8 +183,8 @@ def generate_invoice(
     period_start, period_end = get_period_dates(year, month)
     invoice = Invoice(
         invoice_number,
-        store.company,
-        store.client,
+        store.config.COMPANY,
+        store.config.CLIENT,
         period_start,
         period_end,
     )
@@ -235,7 +250,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.synch:
         ret = synch_with_clockify(store)
     if args.interactive_mode:
-        ret |= run_interactive(store, args.debug)
+        ret |= run_interactive(store)
     else:
         ret |= generate_invoice(store, args.year, args.month)
     return ret

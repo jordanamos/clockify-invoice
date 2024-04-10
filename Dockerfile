@@ -7,7 +7,6 @@ ENV PYTHONDONTWRITEBYTECODE=1
 # Keeps Python from buffering stdout and stderr to avoid situations where
 # the application crashes without emitting any logs due to buffering.
 ENV PYTHONUNBUFFERED=1
-
 # The home directory for this app. This will be volume mounted in docker-compose.yml
 # and will also contain the config file
 ENV CLOCKIFY_INVOICE_HOME=/invoices
@@ -43,7 +42,6 @@ COPY clockify_invoice clockify_invoice
 COPY setup.py .
 COPY setup.cfg .
 COPY README.md .
-
 RUN python -m pip install . --no-cache-dir
 
 # Switch to the non-privileged user to run the application.

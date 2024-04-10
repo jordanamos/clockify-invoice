@@ -1,10 +1,19 @@
 {
-    "api_key": "your_api_key_here",
+    "api_key": "",
     "flask": {
         "host": "0.0.0.0",
         "port": 5000,
         "user": "",
         "password": ""
+
+    },
+    "mail": {
+        "server": "smtp.gmail.com",
+        "port": 465,
+        "username": "",
+        "password": "",
+        "use_tls": false,
+        "use_ssl": true
     },
     "company": {
         "name": "Your Company",
@@ -13,7 +22,7 @@
         "rate": 70.0
     },
     "client": {
-        "contact": "",
+        "contact": "Ben Howard",
         "name": "Your Client",
         "email": "client.email@gmail.com"
     }

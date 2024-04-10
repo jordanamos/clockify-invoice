@@ -4,10 +4,16 @@ from datetime import date
 from datetime import datetime
 from typing import Any
 from typing import NamedTuple
+from typing import TYPE_CHECKING
 
 import tabulate
 from flask import render_template
 from weasyprint import HTML
+
+from clockify_invoice.email import Email
+
+if TYPE_CHECKING:
+    from clockify_invoice.config import Config
 
 
 class Invoice:
@@ -100,6 +106,27 @@ class Invoice:
             f"{table_str}\n\n"
             f"Total: {self.total}\n"
         )
+
+    def prepare_email(
+        self,
+        config: Config,
+        to: str | None = None,
+        subject: str | None = None,
+        body: str | None = None,
+    ) -> Email:
+        to = to or self.client.email
+        sender = self.company.email
+        subject = (
+            subject or f"Invoice {self.invoice_number} - {self.invoice_date:%B %Y}"
+        )
+        body = body or (
+            f"Hi {self.client.contact},\n\n"
+            "Please see attached invoice.\n\n"
+            f"Kind Regards,\n{self.company.name}"
+        )
+        email = Email(to, sender, subject, body, config)
+        email.attach_pdf(self.invoice_name, self.pdf())
+        return email
 
 
 class TimeEntry(NamedTuple):

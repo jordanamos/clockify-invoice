@@ -3,7 +3,8 @@ services:
     build:
       context: .
     ports:
-      - 5673:5673
-    # host:container
+      - 5000:5000
+      - 465:465
     volumes:
-      - /Users/jamos/dev/repos/clockify-invoice/invoices:/invoices
+      - ${CLOCKIFY_INVOICE_HOME}/clockify-invoice-config.json:/invoices/clockify-invoice-config.json
+      - ${CLOCKIFY_INVOICE_HOME}/db.db:/invoices/db.db
