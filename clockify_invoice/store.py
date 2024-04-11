@@ -97,10 +97,7 @@ class Store:
                 f"Store directory '{self.directory}' did not exist so it was created"
             )
             if not os.path.exists(config_file):
-                with open(
-                    config_file,
-                    "w",
-                ) as f:
+                with open(config_file, "w") as f:
                     f.write(_SAMPLE_CONFIG)
                     logger.info(
                         f"Config file '{config_file}' did not exist so it was created"
