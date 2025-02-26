@@ -1,6 +1,7 @@
 import argparse
 import calendar as cal
 import io
+import json
 import logging
 import pickle
 from collections.abc import Sequence
@@ -16,6 +17,7 @@ from flask import request
 from flask import send_file
 from flask import session
 
+from clockify_invoice.config import Config
 from clockify_invoice.config import ConfigError
 from clockify_invoice.invoice import Invoice
 from clockify_invoice.store import Store
@@ -102,6 +104,22 @@ def email() -> werkzeug.wrappers.Response:
     return redirect("/")
 
 
+@app.route("/config", methods=["POST"])
+@auth_required
+def config() -> werkzeug.wrappers.Response:
+    session["active-tab"] = "config-tab"
+    store: Store = app.config[FLASK_CONFIG_STORE_KEY]
+    conf_data: str = request.form["config"]
+    try:
+        new_conf_json = json.loads(conf_data)
+        store.config.save_config(new_conf_json)
+        store.config = Config(store.config_file)
+        logger.info("Config updated.")
+    except json.JSONDecodeError as e:
+        logger.error(f"Error saving config: {e}")
+    return redirect("/")
+
+
 @app.route("/", methods=["GET", "POST"])
 @auth_required
 def process_invoice() -> str:
@@ -130,11 +148,13 @@ def process_invoice() -> str:
         invoice.invoice_number = invoice_number
         invoice.period_start = period_start
         invoice.period_end = period_end
+        invoice.company = store.config.company
+        invoice.client = store.config.client
     else:
         invoice = Invoice(
             invoice_number,
-            store.config.COMPANY,
-            store.config.CLIENT,
+            store.config.company,
+            store.config.client,
             period_start,
             period_end,
         )
@@ -146,8 +166,13 @@ def process_invoice() -> str:
     session["invoice"] = pickle.dumps(invoice)
     invoices = store.get_invoices(int(form_data["financial-year"]))
     invoices_total = sum(invoice["total"] for invoice in invoices)
+    config_str = json.dumps(store.config._config, indent=4)
+
     return invoice.html(
-        form_data=form_data, invoices=invoices, invoices_total=invoices_total
+        form_data=form_data,
+        invoices=invoices,
+        invoices_total=invoices_total,
+        config=config_str,
     )
 
 
@@ -161,7 +186,7 @@ def synch() -> werkzeug.wrappers.Response:
 
 
 def run_interactive(store: Store, debug: bool = False) -> int:
-    app.secret_key = store.config.API_KEY
+    app.secret_key = store.config.api_key
     app.config[FLASK_CONFIG_STORE_KEY] = store
     app.run(store.config.FLASK_HOST, store.config.FLASK_PORT, debug=debug)
     return 0
@@ -183,8 +208,8 @@ def generate_invoice(
     period_start, period_end = get_period_dates(year, month)
     invoice = Invoice(
         invoice_number,
-        store.config.COMPANY,
-        store.config.CLIENT,
+        store.config.company,
+        store.config.client,
         period_start,
         period_end,
     )
@@ -250,7 +275,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.synch:
         ret = synch_with_clockify(store)
     if args.interactive_mode:
-        ret |= run_interactive(store)
+        ret |= run_interactive(store, args.debug)
     else:
         ret |= generate_invoice(store, args.year, args.month)
     return ret
