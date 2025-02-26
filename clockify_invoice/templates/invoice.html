@@ -90,7 +90,7 @@
 {% endblock %}
 
 {% block table %}
-    <span  class="side-element" id="invoice-table" style="display: none;">
+    <span class="side-element" id="invoice-table" style="display: none;">
         <script>
             function submitInvoiceForm(financialYear) {
                 document.getElementById('financial-year').value = financialYear;
@@ -149,6 +149,25 @@
             </tbody>
             </table>
         </div>
+    </span>
+{% endblock %}
+
+{% block config %}
+    <span class="side-element mt-2" id="config-container" style="display: none;">
+        <form method="POST" id="config-form" action="{{url_for('config')}}" >
+            <input type="hidden" name="active-tab" id="active-tab"/>
+            <div class="mb-3">
+                <textarea
+                    name="config"
+                    class="form-control"
+                    id="config-text-area"
+                    rows="20"
+                >{{ config }}</textarea>
+              </div>
+            <button class="btn btn-primary" type="submit">
+            Save
+            </button>
+        </form>
     </span>
 {% endblock %}
 

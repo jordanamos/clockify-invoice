@@ -8,6 +8,38 @@ from typing import Any
 from clockify_invoice.invoice import Client
 from clockify_invoice.invoice import Company
 
+_SAMPLE_CONFIG = """\
+{
+    "api_key": "",
+    "flask": {
+        "host": "0.0.0.0",
+        "port": 5000,
+        "user": "",
+        "password": ""
+
+    },
+    "mail": {
+        "server": "smtp.gmail.com",
+        "port": 465,
+        "username": "",
+        "password": "",
+        "use_tls": false,
+        "use_ssl": true
+    },
+    "company": {
+        "name": "Your Company",
+        "email": "your.email@gmail.com",
+        "abn": "123 456 789",
+        "rate": 70.0
+    },
+    "client": {
+        "contact": "Ben Howard",
+        "name": "Your Client",
+        "email": "client.email@gmail.com"
+    }
+}
+"""
+
 
 class ConfigError(Exception):
     pass
@@ -21,11 +53,21 @@ class Config:
         except (OSError, json.JSONDecodeError) as e:
             raise ConfigError(f"Error in {config_file}: {e}")
 
-        self.API_KEY = self._get_setting("api_key", os.getenv("CLOCKIFY_API_KEY"), True)
-        self.COMPANY = self._load_company_from_config()
-        self.CLIENT = self._load_client_from_config()
+        self.config_file = config_file
         self._load_flask_config()
         self._load_mail_config()
+
+    @property
+    def api_key(self) -> str:
+        return self._get_setting("api_key", os.getenv("CLOCKIFY_API_KEY"), True)
+
+    @property
+    def company(self) -> Company:
+        return self._load_company_from_config()
+
+    @property
+    def client(self) -> Client:
+        return self._load_client_from_config()
 
     def _get_setting(
         self,
@@ -89,3 +131,11 @@ class Config:
         self.FLASK_HOST = _get_flask_setting("host", default="0.0.0.0")
         self.FLASK_USER = _get_flask_setting("user", required=False)
         self.FLASK_PASSWORD = _get_flask_setting("password", required=False)
+
+    def reset(self) -> None:
+        with open(self.config_file, "w") as f:
+            f.write(_SAMPLE_CONFIG)
+
+    def save_config(self, config: dict[str, Any]) -> None:
+        with open(self.config_file, "w") as f:
+            json.dump(config, f, indent=4)
