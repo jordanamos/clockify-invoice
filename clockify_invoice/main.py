@@ -114,7 +114,6 @@ def config() -> werkzeug.wrappers.Response:
         new_conf_json = json.loads(conf_data)
         store.config.save_config(new_conf_json)
         store.config = Config(store.config_file)
-        logger.info(store.config._get_setting("company"))
         logger.info("Config updated.")
     except json.JSONDecodeError as e:
         logger.error(f"Error saving config: {e}")
