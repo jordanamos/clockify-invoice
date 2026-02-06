@@ -133,7 +133,11 @@ class Config:
         self.FLASK_PASSWORD = _get_flask_setting("password", required=False)
 
     def reset(self) -> None:
-        with open(self.config_file, "w") as f:
+        self.createConfig(self.config_file)
+    
+    @staticmethod
+    def createConfig(config_file: str) -> None:
+        with open(config_file, "w") as f:
             f.write(_SAMPLE_CONFIG)
 
     def save_config(self, config: dict[str, Any]) -> None:

@@ -238,10 +238,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
     )
     parser.add_argument(
+        "--interactive",
         "-i",
         action="store_true",
         dest="interactive_mode",
-        help="run a local server to create invoices interactively in the browser",
+        help="run a local http server to manage invoices in your browser",
     )
     parser.add_argument(
         "--year",

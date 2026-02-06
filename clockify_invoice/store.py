@@ -52,25 +52,26 @@ class Store:
             self.directory, "clockify-invoice-config.json"
         )
         self.config_file = config_file
-        self._initialise()
         self.db_path = os.path.join(self.directory, "db.db")
-        self.config = Config(config_file)
         self._workspace_id = None
         self._user_id = None
+        self._initialise()
         self._create_db_if_not_exists()
+        self.config = Config(config_file)
+
 
     def _initialise(self) -> None:
         if not os.path.exists(self.directory):
             os.makedirs(self.directory, exist_ok=True)
             logger.info(
-                f"Store directory '{self.directory}' did not exist so it was created"
+                f"Created store directory '{self.directory}'"
             )
-            if not os.path.exists(self.config_file):
-                self.config.reset()
-                logger.info(
-                    f"Config file '{self.config_file}' did not exist so it was created"
-                )
-        logger.debug(f"Using store directory: {self.directory}")
+        if not os.path.exists(self.config_file):
+            Config.createConfig(self.config_file)
+            logger.info(
+                f"Created config file '{self.config_file}'"
+            )
+        logger.info(f"Using store directory: {self.directory}")
 
     @staticmethod
     def _get_default_directory() -> str:
