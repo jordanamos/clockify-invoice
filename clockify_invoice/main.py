@@ -129,7 +129,7 @@ def process_invoice() -> str:
         "years": YEARS,
         "month": TODAY.month,
         "year": TODAY.year,
-        "financial-year": TODAY.year - 1,
+        "financial-year": TODAY.year if TODAY.month >= 7 else TODAY.year - 1,
         "display-form": "block",
         "invoice-number": store.get_next_invoice_number(),
         "active-tab": session.get("active-tab") or "form-tab",
