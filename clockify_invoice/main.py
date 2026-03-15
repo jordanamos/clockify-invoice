@@ -4,6 +4,7 @@ import io
 import json
 import logging
 import pickle
+import zipfile
 from collections.abc import Sequence
 from datetime import date
 from datetime import datetime
@@ -52,6 +53,55 @@ def format_financial_year(year: int) -> str:
 @app.template_filter("format_date")
 def format_date(value: date, format: str = "%d/%m/%Y") -> str:
     return value.strftime(format)
+
+
+@app.route("/invoice/<int:invoice_id>", methods=["GET"])
+@auth_required
+def view_invoice(invoice_id: int) -> str | werkzeug.wrappers.Response:
+    store: Store = app.config[FLASK_CONFIG_STORE_KEY]
+    result = store.get_invoice_by_id(invoice_id)
+    if not result:
+        return redirect("/")
+    invoice, _ = result
+    return invoice.html(
+        form_data={"display-form": "none"},
+        invoices_total=0,
+    )
+
+
+@app.route("/download/<int:invoice_id>", methods=["GET"])
+@auth_required
+def download_invoice(invoice_id: int) -> werkzeug.wrappers.Response:
+    store: Store = app.config[FLASK_CONFIG_STORE_KEY]
+    result = store.get_invoice_by_id(invoice_id)
+    if not result:
+        return redirect("/")
+    invoice, pdf_bytes = result
+    return send_file(
+        io.BytesIO(pdf_bytes),
+        PDF_MIME_TYPE,
+        True,
+        invoice.invoice_name,
+    )
+
+
+@app.route("/download_fy/<int:year>", methods=["GET"])
+@auth_required
+def download_fy(year: int) -> werkzeug.wrappers.Response:
+    store: Store = app.config[FLASK_CONFIG_STORE_KEY]
+    invoices_with_pdf = store.get_fy_invoices_with_pdf(year)
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        for invoice, pdf_bytes in invoices_with_pdf:
+            zf.writestr(invoice.invoice_name, pdf_bytes)
+    zip_buffer.seek(0)
+    zip_filename = f"FY{year}-{(year + 1) % 100:02d}_Invoices.zip"
+    return send_file(
+        zip_buffer,
+        "application/zip",
+        True,
+        zip_filename,
+    )
 
 
 @app.route("/delete_invoice/<int:invoice_id>", methods=["POST"])
@@ -132,6 +182,7 @@ def process_invoice() -> str:
         "financial-year": TODAY.year - 1,
         "display-form": "block",
         "invoice-number": store.get_next_invoice_number(),
+        "invoice-date": TODAY.isoformat(),
         "active-tab": session.get("active-tab") or "form-tab",
     }
 
@@ -143,9 +194,16 @@ def process_invoice() -> str:
 
     invoice_number = int(form_data["invoice-number"])
 
+    invoice_date_str = form_data.get("invoice-date")
+    if invoice_date_str:
+        invoice_date = date.fromisoformat(str(invoice_date_str))
+    else:
+        invoice_date = TODAY
+
     if "invoice" in session:
         invoice: Invoice = pickle.loads(session["invoice"])
         invoice.invoice_number = invoice_number
+        invoice.invoice_date = invoice_date
         invoice.period_start = period_start
         invoice.period_end = period_end
         invoice.company = store.config.company
@@ -157,6 +215,7 @@ def process_invoice() -> str:
             store.config.client,
             period_start,
             period_end,
+            invoice_date=invoice_date,
         )
 
     invoice.time_entries = store.get_time_entries(

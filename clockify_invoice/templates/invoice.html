@@ -27,6 +27,20 @@
           </div>
       </div>
       <div class="mb-2">
+          <div class="input-group mb-3">
+            <span class="input-group-text">Invoice Date</span>
+            <input
+              type="date"
+              class="form-control form-control-sm"
+              id="invoice-date"
+              name="invoice-date"
+              value="{{form_data['invoice-date']}}"
+              onchange="setStatus()"
+              required
+            />
+          </div>
+      </div>
+      <div class="mb-2">
           <label for="month" class="form-label">For The Month</label>
           <div class="input-group">
             <select
@@ -94,6 +108,7 @@
         <script>
             function submitInvoiceForm(financialYear) {
                 document.getElementById('financial-year').value = financialYear;
+                document.getElementById('download-fy-zip').href = '/download_fy/' + financialYear;
                 document.getElementById('invoice-form').submit();
             }
         </script>
@@ -104,6 +119,7 @@
             <select
                 class="form-select form-select-sm"
                 aria-label="form-select-sm"
+                id="fy-select"
                 onchange="submitInvoiceForm(this.value)"
                 required
             >
@@ -116,6 +132,18 @@
                     </option>
                 {% endfor %}
             </select>
+            <a
+                class="btn btn-sm btn-success"
+                id="download-fy-zip"
+                href="{{ url_for('download_fy', year=form_data['financial-year'] | int) }}"
+                title="Download All (ZIP)"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-file-earmark-zip" viewBox="0 0 16 16">
+                    <path d="M5 7.5a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v.938l.4 1.599a1 1 0 0 1-.416 1.074l-.93.62a1 1 0 0 1-1.11 0l-.929-.62a1 1 0 0 1-.415-1.074L5 8.438zm2 0H6v.938a1 1 0 0 1-.03.243l-.4 1.598.93.62.929-.62-.4-1.598A1 1 0 0 1 7 8.438z"/>
+                    <path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5zm-3 0A1.5 1.5 0 0 1 9.5 3V1h-2v1h-1v1h1v1h-1v1h1v1H6V5H5V4h1V3H5V2h1V1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5z"/>
+                </svg>
+                ZIP
+            </a>
         </div>
         <div class="table-responsive">
             <table class="table table-hover ">
@@ -126,6 +154,8 @@
                 <th>#</th>
                 <th>Month</th>
                 <th>Total</th>
+                <th></th>
+                <th></th>
                 </tr>
             </thead>
             <tbody>
@@ -144,6 +174,22 @@
                     <td>{{invoice.invoice_number}}</td>
                     <td>{{invoice.period_start.strftime('%b %Y')}}</td>
                     <td>{{ "$%.2f" | format(invoice.total) }}</td>
+                    <td>
+                        <a class="btn btn-sm btn-primary" href="{{ url_for('view_invoice', invoice_id=invoice['invoice_id']) }}" target="_blank" title="View">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-eye" viewBox="0 0 16 16">
+                                <path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8M1.173 8a13 13 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5s3.879 1.168 5.168 2.457A13 13 0 0 1 14.828 8q-.086.13-.195.288c-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5s-3.879-1.168-5.168-2.457A13 13 0 0 1 1.172 8z"/>
+                                <path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5M4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0"/>
+                            </svg>
+                        </a>
+                    </td>
+                    <td>
+                        <a class="btn btn-sm btn-success" href="{{ url_for('download_invoice', invoice_id=invoice['invoice_id']) }}" title="Download">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-download" viewBox="0 0 16 16">
+                                <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5"/>
+                                <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708z"/>
+                            </svg>
+                        </a>
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>

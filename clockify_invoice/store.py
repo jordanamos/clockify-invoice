@@ -36,6 +36,19 @@ WHERE period_start > ?
     AND period_end < ?
 """
 
+_GET_INVOICE_QUERY = """\
+SELECT pickle, pdf
+FROM invoice
+WHERE id = ?
+"""
+
+_GET_FY_INVOICES_PDF_QUERY = """\
+SELECT id, pickle, pdf
+FROM invoice
+WHERE period_start > ?
+    AND period_end < ?
+"""
+
 _DELETE_INVOICE_QUERY = """\
 DELETE
 FROM INVOICE
@@ -134,6 +147,35 @@ class Store:
         with contextlib.closing(sqlite3.connect(path)) as db:
             with db:
                 yield db
+
+    def get_invoice_by_id(self, invoice_id: int) -> tuple[Invoice, bytes] | None:
+        """Return (Invoice, pdf_bytes) for a given invoice ID, or None."""
+        with self.connect() as db:
+            row = db.execute(_GET_INVOICE_QUERY, (invoice_id,)).fetchone()
+        if not row:
+            return None
+        pickle_bytes = base64.b64decode(row[0])
+        invoice: Invoice = pickle.loads(pickle_bytes)
+        pdf_bytes = base64.b64decode(row[1])
+        return invoice, pdf_bytes
+
+    def get_fy_invoices_with_pdf(
+        self, financial_year: int
+    ) -> list[tuple[Invoice, bytes]]:
+        """Return list of (Invoice, pdf_bytes) for a financial year."""
+        start_date = datetime.datetime(financial_year, 6, 30)
+        end_date = datetime.datetime(financial_year + 1, 7, 1)
+        with self.connect() as db:
+            rows = db.execute(
+                _GET_FY_INVOICES_PDF_QUERY, (start_date, end_date)
+            ).fetchall()
+        results: list[tuple[Invoice, bytes]] = []
+        for row in rows:
+            pickle_bytes = base64.b64decode(row[1])
+            invoice: Invoice = pickle.loads(pickle_bytes)
+            pdf_bytes = base64.b64decode(row[2])
+            results.append((invoice, pdf_bytes))
+        return results
 
     def delete_invoice(self, id: int) -> None:
         with self.connect() as db:
