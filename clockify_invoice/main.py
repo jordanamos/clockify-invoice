@@ -14,9 +14,12 @@ from typing import Literal
 import werkzeug.wrappers
 from flask import Flask
 from flask import redirect
+from flask import render_template
 from flask import request
 from flask import send_file
 from flask import session
+
+from weasyprint import HTML as WeasyHTML
 
 from clockify_invoice.config import Config
 from clockify_invoice.config import ConfigError
@@ -101,6 +104,34 @@ def download_fy(year: int) -> werkzeug.wrappers.Response:
         "application/zip",
         True,
         zip_filename,
+    )
+
+
+@app.route("/summary/<int:year>", methods=["GET"])
+@auth_required
+def download_summary(year: int) -> werkzeug.wrappers.Response:
+    store: Store = app.config[FLASK_CONFIG_STORE_KEY]
+    invoices_with_pdf = store.get_fy_invoices_with_pdf(year)
+    invoices = [inv for inv, _ in invoices_with_pdf]
+    grand_total = sum(inv.total for inv in invoices)
+    next_yy = f"{(year + 1) % 100:02d}"
+    html_string = render_template(
+        "summary.html",
+        year=year,
+        next_yy=next_yy,
+        company_name=store.config.company.name,
+        invoices=invoices,
+        grand_total=grand_total,
+    )
+    pdf_bytes = WeasyHTML(string=html_string).write_pdf()
+    if not pdf_bytes:
+        return redirect("/")
+    filename = f"FY{year}-{next_yy}_Summary.pdf"
+    return send_file(
+        io.BytesIO(pdf_bytes),
+        PDF_MIME_TYPE,
+        True,
+        filename,
     )
 
 
