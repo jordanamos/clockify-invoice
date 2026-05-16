@@ -29,11 +29,11 @@ WHERE user = ?
 GROUP BY description
 """
 
-_INVOCES_QUERY = """\
+_INVOICES_QUERY = """\
 SELECT id, pickle
 FROM invoice
-WHERE period_start > ?
-    AND period_end < ?
+WHERE period_start >= ?
+    AND period_end <= ?
 """
 
 _GET_INVOICE_QUERY = """\
@@ -45,8 +45,8 @@ WHERE id = ?
 _GET_FY_INVOICES_PDF_QUERY = """\
 SELECT id, pickle, pdf
 FROM invoice
-WHERE period_start > ?
-    AND period_end < ?
+WHERE period_start >= ?
+    AND period_end <= ?
 """
 
 _DELETE_INVOICE_QUERY = """\
@@ -163,8 +163,8 @@ class Store:
         self, financial_year: int
     ) -> list[tuple[Invoice, bytes]]:
         """Return list of (Invoice, pdf_bytes) for a financial year."""
-        start_date = datetime.datetime(financial_year, 6, 30)
-        end_date = datetime.datetime(financial_year + 1, 7, 1)
+        start_date = datetime.datetime(financial_year, 7, 1)
+        end_date = datetime.datetime(financial_year + 1, 6, 30)
         with self.connect() as db:
             rows = db.execute(
                 _GET_FY_INVOICES_PDF_QUERY, (start_date, end_date)
@@ -214,8 +214,8 @@ class Store:
             invoice.invoice_date,
             invoice.period_start,
             invoice.period_end,
-            invoice.company.name,
             invoice.client.name,
+            invoice.company.name,
             invoice.total,
             0,
             base64.b64encode(invoice.pdf()).decode(),
@@ -240,10 +240,10 @@ class Store:
             )
 
     def get_invoices(self, financial_year: int) -> list[dict[str, Any]]:
-        start_date = datetime.datetime(financial_year, 6, 30)
-        end_date = datetime.datetime(financial_year + 1, 7, 1)
+        start_date = datetime.datetime(financial_year, 7, 1)
+        end_date = datetime.datetime(financial_year + 1, 6, 30)
         with self.connect() as db:
-            rows = db.execute(_INVOCES_QUERY, (start_date, end_date)).fetchall()
+            rows = db.execute(_INVOICES_QUERY, (start_date, end_date)).fetchall()
 
         invoices: list[dict[str, Any]] = []
 

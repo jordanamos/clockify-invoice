@@ -268,6 +268,23 @@
                 </table>
             </td>
         </tr>
+        {% if invoice['company'].bank_details %}
+        <tr class="information">
+            <td colspan="5">
+                <table>
+                    <tr>
+                        <td>
+                            <b>Payment Details</b><br />
+                            Account Name: {{invoice['company'].bank_details.account_name}}<br />
+                            BSB: {{invoice['company'].bank_details.bsb}}<br />
+                            Account: {{invoice['company'].bank_details.account_number}}
+                        </td>
+                        <td></td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+        {% endif %}
         <tr class="details">
             <td colspan="4">
             For the period:<br />

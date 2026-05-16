@@ -19,7 +19,12 @@
         "name": "Your Company",
         "email": "your.email@gmail.com",
         "abn": "123 456 789",
-        "rate": 70.0
+        "rate": 70.0,
+        "bank_details": {
+            "account_name": "Your Company Pty Ltd",
+            "bsb": "000-000",
+            "account_number": "12345678"
+        }
     },
     "client": {
         "contact": "Ben Howard",

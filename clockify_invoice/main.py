@@ -39,8 +39,6 @@ logger = logging.getLogger("clockify-invoice")
 app = Flask(__name__)
 
 # Constants
-TODAY = date.today()
-YEARS = tuple(range(TODAY.year, TODAY.year - 5, -1))
 MONTHS = tuple(cal.month_name[1:])
 FLASK_CONFIG_STORE_KEY = "store"
 PDF_MIME_TYPE = "application/pdf"
@@ -48,9 +46,7 @@ PDF_MIME_TYPE = "application/pdf"
 
 @app.template_filter("format_financial_year")
 def format_financial_year(year: int) -> str:
-    start_date = datetime(year, 6, 30)
-    end_date = datetime(year + 1, 7, 1)
-    return f"{start_date.strftime('%Y')}-{end_date.strftime('%y')}"
+    return f"{year}-{(year + 1) % 100:02d}"
 
 
 @app.template_filter("format_date")
@@ -68,7 +64,7 @@ def view_invoice(invoice_id: int) -> str | werkzeug.wrappers.Response:
     invoice, _ = result
     return invoice.html(
         form_data={"display-form": "none"},
-        invoices_total=0,
+        invoices_total=invoice.total,
     )
 
 
@@ -93,6 +89,8 @@ def download_invoice(invoice_id: int) -> werkzeug.wrappers.Response:
 def download_fy(year: int) -> werkzeug.wrappers.Response:
     store: Store = app.config[FLASK_CONFIG_STORE_KEY]
     invoices_with_pdf = store.get_fy_invoices_with_pdf(year)
+    if not invoices_with_pdf:
+        return redirect("/")
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
         for invoice, pdf_bytes in invoices_with_pdf:
@@ -112,6 +110,8 @@ def download_fy(year: int) -> werkzeug.wrappers.Response:
 def download_summary(year: int) -> werkzeug.wrappers.Response:
     store: Store = app.config[FLASK_CONFIG_STORE_KEY]
     invoices_with_pdf = store.get_fy_invoices_with_pdf(year)
+    if not invoices_with_pdf:
+        return redirect("/")
     invoices = [inv for inv, _ in invoices_with_pdf]
     grand_total = sum(inv.total for inv in invoices)
     next_yy = f"{(year + 1) % 100:02d}"
@@ -205,15 +205,17 @@ def config() -> werkzeug.wrappers.Response:
 @auth_required
 def process_invoice() -> str:
     store: Store = app.config[FLASK_CONFIG_STORE_KEY]
+    today = date.today()
+    years = tuple(range(today.year, today.year - 5, -1))
     form_data: dict[str, Any] = {
         "months": MONTHS,
-        "years": YEARS,
-        "month": TODAY.month,
-        "year": TODAY.year,
-        "financial-year": TODAY.year - 1,
+        "years": years,
+        "month": today.month,
+        "year": today.year,
+        "financial-year": today.year - 1,
         "display-form": "block",
         "invoice-number": store.get_next_invoice_number(),
-        "invoice-date": TODAY.isoformat(),
+        "invoice-date": today.isoformat(),
         "active-tab": session.get("active-tab") or "form-tab",
     }
 
@@ -229,7 +231,7 @@ def process_invoice() -> str:
     if invoice_date_str:
         invoice_date = date.fromisoformat(str(invoice_date_str))
     else:
-        invoice_date = TODAY
+        invoice_date = today
 
     if "invoice" in session:
         invoice: Invoice = pickle.loads(session["invoice"])
@@ -337,14 +339,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--year",
         type=int,
-        default=TODAY.year,
+        default=date.today().year,
         metavar="INT",
         help="invoice period year (%(default)s) ",
     )
     parser.add_argument(
         "--month",
         type=int,
-        default=TODAY.month,
+        default=date.today().month,
         metavar="INT",
         choices=range(1, 13),
         help="invoice period month between 1-12 (%(default)s)",
