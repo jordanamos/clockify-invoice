@@ -113,6 +113,7 @@
                 document.getElementById('invoice-form').submit();
             }
         </script>
+        {% if 'financial-year' in form_data %}
         <div class="input-group mt-2">
             <div class="input-group-prepend">
                 <span class="input-group-text">Financial Year</span>
@@ -158,6 +159,7 @@
                 Summary
             </a>
         </div>
+        {% endif %}
         <div class="table-responsive">
             <table class="table table-hover ">
             <caption>{{ "$%.2f" | format(invoices_total) }}</caption>

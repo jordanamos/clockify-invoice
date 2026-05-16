@@ -237,7 +237,9 @@
         }
       }
     }
-    setTab('{{form_data['active-tab']}}');
+    setTab('{{form_data.get('active-tab', '')}}');
+    {% if 'year' in form_data %}
     document.getElementById('financial-year').setAttribute('value', {{ form_data['year'] }});
+    {% endif %}
   </script>
 </html>
