@@ -110,9 +110,7 @@ class Config:
             bank_details = None
             bank_cfg = _get_company_setting("bank_details", required=False)
             if bank_cfg and isinstance(bank_cfg, dict):
-                _get_bank_setting = functools.partial(
-                    self._get_setting, cfg=bank_cfg
-                )
+                _get_bank_setting = functools.partial(self._get_setting, cfg=bank_cfg)
                 bank_details = BankDetails(
                     _get_bank_setting("account_name"),
                     _get_bank_setting("bsb"),
@@ -152,7 +150,7 @@ class Config:
 
     def reset(self) -> None:
         self.createConfig(self.config_file)
-    
+
     @staticmethod
     def createConfig(config_file: str) -> None:
         with open(config_file, "w") as f:
