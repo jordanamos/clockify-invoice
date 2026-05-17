@@ -16,6 +16,11 @@ from clockify_invoice.invoice import TimeEntry
 
 logger = logging.getLogger("clockify-invoice")
 
+
+class DuplicateInvoiceNumberError(Exception):
+    pass
+
+
 _TIME_ENTRIES_QUERY = """\
 SELECT MAX(end_time) AS date
     , description
@@ -24,16 +29,29 @@ FROM time_entry
 WHERE user = ?
     AND workspace = ?
     AND start_time >= ?
-    AND end_time < ?
+    AND start_time < ?
     AND duration_seconds > 0
 GROUP BY description
 """
 
-_INVOCES_QUERY = """\
+_INVOICES_QUERY = """\
 SELECT id, pickle
 FROM invoice
-WHERE period_start > ?
-    AND period_end < ?
+WHERE period_start >= ?
+    AND period_start < ?
+"""
+
+_GET_INVOICE_QUERY = """\
+SELECT pickle, pdf
+FROM invoice
+WHERE id = ?
+"""
+
+_GET_FY_INVOICES_PDF_QUERY = """\
+SELECT id, pickle, pdf
+FROM invoice
+WHERE period_start >= ?
+    AND period_start < ?
 """
 
 _DELETE_INVOICE_QUERY = """\
@@ -59,18 +77,13 @@ class Store:
         self._create_db_if_not_exists()
         self.config = Config(config_file)
 
-
     def _initialise(self) -> None:
         if not os.path.exists(self.directory):
             os.makedirs(self.directory, exist_ok=True)
-            logger.info(
-                f"Created store directory '{self.directory}'"
-            )
+            logger.info(f"Created store directory '{self.directory}'")
         if not os.path.exists(self.config_file):
             Config.createConfig(self.config_file)
-            logger.info(
-                f"Created config file '{self.config_file}'"
-            )
+            logger.info(f"Created config file '{self.config_file}'")
         logger.info(f"Using store directory: {self.directory}")
 
     @staticmethod
@@ -125,6 +138,9 @@ class Store:
                     pdf TEXT,
                     pickle TEXT
                 );
+
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_invoice_number
+                    ON invoice(number);
                 """
             )
 
@@ -134,6 +150,35 @@ class Store:
         with contextlib.closing(sqlite3.connect(path)) as db:
             with db:
                 yield db
+
+    def get_invoice_by_id(self, invoice_id: int) -> tuple[Invoice, bytes] | None:
+        """Return (Invoice, pdf_bytes) for a given invoice ID, or None."""
+        with self.connect() as db:
+            row = db.execute(_GET_INVOICE_QUERY, (invoice_id,)).fetchone()
+        if not row:
+            return None
+        pickle_bytes = base64.b64decode(row[0])
+        invoice: Invoice = pickle.loads(pickle_bytes)
+        pdf_bytes = base64.b64decode(row[1])
+        return invoice, pdf_bytes
+
+    def get_fy_invoices_with_pdf(
+        self, financial_year: int
+    ) -> list[tuple[Invoice, bytes]]:
+        """Return list of (Invoice, pdf_bytes) for a financial year."""
+        start_date = datetime.date(financial_year, 7, 1)
+        end_date = datetime.date(financial_year + 1, 7, 1)
+        with self.connect() as db:
+            rows = db.execute(
+                _GET_FY_INVOICES_PDF_QUERY, (start_date, end_date)
+            ).fetchall()
+        results: list[tuple[Invoice, bytes]] = []
+        for row in rows:
+            pickle_bytes = base64.b64decode(row[1])
+            invoice: Invoice = pickle.loads(pickle_bytes)
+            pdf_bytes = base64.b64decode(row[2])
+            results.append((invoice, pdf_bytes))
+        return results
 
     def delete_invoice(self, id: int) -> None:
         with self.connect() as db:
@@ -167,41 +212,46 @@ class Store:
         return entries
 
     def save_invoice(self, invoice: Invoice) -> None:
+        cols = (
+            "number",
+            "date",
+            "period_start",
+            "period_end",
+            "payer",
+            "payee",
+            "total",
+            "paid",
+            "pdf",
+            "pickle",
+        )
         invoice_data = (
             invoice.invoice_number,
             invoice.invoice_date,
             invoice.period_start,
             invoice.period_end,
-            invoice.company.name,
             invoice.client.name,
+            invoice.company.name,
             invoice.total,
             0,
             base64.b64encode(invoice.pdf()).decode(),
             base64.b64encode(pickle.dumps(invoice)).decode(),
         )
-        with self.connect() as db:
-            cols = (
-                "number",
-                "date",
-                "period_start",
-                "period_end",
-                "payer",
-                "payee",
-                "total",
-                "paid",
-                "pdf",
-                "pickle",
-            )
-            db.execute(
-                f"INSERT INTO invoice({','.join(cols)}) VALUES(?,?,?,?,?,?,?,?,?,?)",
-                invoice_data,
+        try:
+            with self.connect() as db:
+                db.execute(
+                    f"INSERT INTO invoice({','.join(cols)}) VALUES(?,?,?,?,?,?,?,?,?,?)",  # NOQA: E501
+                    invoice_data,
+                )
+        except sqlite3.IntegrityError:
+            raise DuplicateInvoiceNumberError(
+                f"Invoice number {invoice.invoice_number} already exists"
             )
 
     def get_invoices(self, financial_year: int) -> list[dict[str, Any]]:
-        start_date = datetime.datetime(financial_year, 6, 30)
-        end_date = datetime.datetime(financial_year + 1, 7, 1)
+        start_date = datetime.date(financial_year, 7, 1)
+        end_date = datetime.date(financial_year + 1, 7, 1)
         with self.connect() as db:
-            rows = db.execute(_INVOCES_QUERY, (start_date, end_date)).fetchall()
+            rows = db.execute(_INVOICES_QUERY, (start_date, end_date)).fetchall()
 
         invoices: list[dict[str, Any]] = []
 

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Invoice Summary — FY {{ year }}-{{ next_yy }}</title>
+    <style>
+      @page {
+        size: a4 portrait;
+        margin: 20mm;
+      }
+
+      body {
+        font-family: "Helvetica Neue", "Helvetica", Helvetica, Arial, sans-serif;
+        font-size: 14px;
+        line-height: 20px;
+        color: #555;
+      }
+
+      .summary-box {
+        max-width: 800px;
+        margin: auto;
+        padding: 30px;
+      }
+
+      .summary-box .title {
+        font-size: 36px;
+        line-height: 42px;
+        color: #333;
+        margin-bottom: 5px;
+      }
+
+      .summary-box .subtitle {
+        font-size: 18px;
+        color: #777;
+        margin-bottom: 30px;
+      }
+
+      .summary-box .company-name {
+        font-size: 14px;
+        color: #999;
+        margin-bottom: 30px;
+      }
+
+      .summary-box table {
+        width: 100%;
+        border-collapse: collapse;
+        text-align: left;
+      }
+
+      .summary-box table thead th {
+        background: #eee;
+        border-bottom: 1px solid #ddd;
+        font-weight: bold;
+        padding: 8px 10px;
+      }
+
+      .summary-box table thead th:last-child {
+        text-align: right;
+      }
+
+      .summary-box table tbody td {
+        padding: 8px 10px;
+        border-bottom: 1px solid #eee;
+      }
+
+      .summary-box table tbody td:last-child {
+        text-align: right;
+      }
+
+      .summary-box table tfoot td {
+        padding: 10px;
+        font-weight: bold;
+        font-size: 16px;
+        border-top: 2px solid #eee;
+      }
+
+      .summary-box table tfoot td:last-child {
+        text-align: right;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="summary-box">
+      <div class="title">Invoice Summary</div>
+      <div class="subtitle">FY {{ year }}-{{ next_yy }}</div>
+      <div class="company-name">{{ company_name }}</div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Invoice #</th>
+            <th>Date</th>
+            <th>Period</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for inv in invoices %}
+          <tr>
+            <td>{{ inv.invoice_number }}</td>
+            <td>{{ inv.invoice_date.strftime('%d/%m/%Y') }}</td>
+            <td>{{ inv.period_start.strftime('%d/%m/%Y') }} — {{ inv.period_end.strftime('%d/%m/%Y') }}</td>
+            <td>${{ "%.2f" | format(inv.total) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="3">Grand Total</td>
+            <td>${{ "%.2f" | format(grand_total) }}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </body>
+</html>

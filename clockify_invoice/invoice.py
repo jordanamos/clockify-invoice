@@ -140,11 +140,18 @@ class TimeEntry(NamedTuple):
         return self.duration_hours * self.rate
 
 
+class BankDetails(NamedTuple):
+    account_name: str
+    bsb: str
+    account_number: str
+
+
 class Company(NamedTuple):
     name: str
     email: str
     abn: str
     rate: float
+    bank_details: BankDetails | None = None
 
 
 class Client(NamedTuple):

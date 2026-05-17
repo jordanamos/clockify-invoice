@@ -5,6 +5,7 @@ import json
 import os
 from typing import Any
 
+from clockify_invoice.invoice import BankDetails
 from clockify_invoice.invoice import Client
 from clockify_invoice.invoice import Company
 
@@ -30,7 +31,12 @@ _SAMPLE_CONFIG = """\
         "name": "Your Company",
         "email": "your.email@gmail.com",
         "abn": "123 456 789",
-        "rate": 70.0
+        "rate": 70.0,
+        "bank_details": {
+            "account_name": "Your Company Pty Ltd",
+            "bsb": "000-000",
+            "account_number": "12345678"
+        }
     },
     "client": {
         "contact": "Ben Howard",
@@ -101,11 +107,23 @@ class Config:
         except ValueError as e:
             raise ConfigError(f"Invalid company rate: {e}")
         else:
+            bank_details = None
+            bank_cfg = _get_company_setting("bank_details", required=False)
+            if bank_cfg and isinstance(bank_cfg, dict):
+                _get_bank_setting = functools.partial(
+                    self._get_setting, cfg=bank_cfg
+                )
+                bank_details = BankDetails(
+                    _get_bank_setting("account_name"),
+                    _get_bank_setting("bsb"),
+                    _get_bank_setting("account_number"),
+                )
             return Company(
                 _get_company_setting("name"),
                 _get_company_setting("email"),
                 _get_company_setting("abn"),
                 rate,
+                bank_details,
             )
 
     def _load_mail_config(self) -> None:

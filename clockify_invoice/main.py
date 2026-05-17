@@ -4,22 +4,25 @@ import io
 import json
 import logging
 import pickle
+import zipfile
 from collections.abc import Sequence
 from datetime import date
-from datetime import datetime
 from typing import Any
 from typing import Literal
 
 import werkzeug.wrappers
 from flask import Flask
 from flask import redirect
+from flask import render_template
 from flask import request
 from flask import send_file
 from flask import session
+from weasyprint import HTML as WeasyHTML
 
 from clockify_invoice.config import Config
 from clockify_invoice.config import ConfigError
 from clockify_invoice.invoice import Invoice
+from clockify_invoice.store import DuplicateInvoiceNumberError
 from clockify_invoice.store import Store
 from clockify_invoice.utils import auth_required
 from clockify_invoice.utils import get_period_dates
@@ -35,8 +38,6 @@ logger = logging.getLogger("clockify-invoice")
 app = Flask(__name__)
 
 # Constants
-TODAY = date.today()
-YEARS = tuple(range(TODAY.year, TODAY.year - 5, -1))
 MONTHS = tuple(cal.month_name[1:])
 FLASK_CONFIG_STORE_KEY = "store"
 PDF_MIME_TYPE = "application/pdf"
@@ -44,14 +45,93 @@ PDF_MIME_TYPE = "application/pdf"
 
 @app.template_filter("format_financial_year")
 def format_financial_year(year: int) -> str:
-    start_date = datetime(year, 6, 30)
-    end_date = datetime(year + 1, 7, 1)
-    return f"{start_date.strftime('%Y')}-{end_date.strftime('%y')}"
+    return f"{year}-{(year + 1) % 100:02d}"
 
 
 @app.template_filter("format_date")
 def format_date(value: date, format: str = "%d/%m/%Y") -> str:
     return value.strftime(format)
+
+
+@app.route("/invoice/<int:invoice_id>", methods=["GET"])
+@auth_required
+def view_invoice(invoice_id: int) -> str | werkzeug.wrappers.Response:
+    store: Store = app.config[FLASK_CONFIG_STORE_KEY]
+    result = store.get_invoice_by_id(invoice_id)
+    if not result:
+        return redirect("/")
+    invoice, _ = result
+    return invoice.html(
+        form_data={"display-form": "none"},
+        invoices_total=invoice.total,
+    )
+
+
+@app.route("/download/<int:invoice_id>", methods=["GET"])
+@auth_required
+def download_invoice(invoice_id: int) -> werkzeug.wrappers.Response:
+    store: Store = app.config[FLASK_CONFIG_STORE_KEY]
+    result = store.get_invoice_by_id(invoice_id)
+    if not result:
+        return redirect("/")
+    invoice, pdf_bytes = result
+    return send_file(
+        io.BytesIO(pdf_bytes),
+        PDF_MIME_TYPE,
+        True,
+        invoice.invoice_name,
+    )
+
+
+@app.route("/download_fy/<int:year>", methods=["GET"])
+@auth_required
+def download_fy(year: int) -> werkzeug.wrappers.Response:
+    store: Store = app.config[FLASK_CONFIG_STORE_KEY]
+    invoices_with_pdf = store.get_fy_invoices_with_pdf(year)
+    if not invoices_with_pdf:
+        return redirect("/")
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        for invoice, pdf_bytes in invoices_with_pdf:
+            zf.writestr(invoice.invoice_name, pdf_bytes)
+    zip_buffer.seek(0)
+    zip_filename = f"FY{year}-{(year + 1) % 100:02d}_Invoices.zip"
+    return send_file(
+        zip_buffer,
+        "application/zip",
+        True,
+        zip_filename,
+    )
+
+
+@app.route("/summary/<int:year>", methods=["GET"])
+@auth_required
+def download_summary(year: int) -> werkzeug.wrappers.Response:
+    store: Store = app.config[FLASK_CONFIG_STORE_KEY]
+    invoices_with_pdf = store.get_fy_invoices_with_pdf(year)
+    if not invoices_with_pdf:
+        return redirect("/")
+    invoices = [inv for inv, _ in invoices_with_pdf]
+    grand_total = sum(inv.total for inv in invoices)
+    next_yy = f"{(year + 1) % 100:02d}"
+    html_string = render_template(
+        "summary.html",
+        year=year,
+        next_yy=next_yy,
+        company_name=store.config.company.name,
+        invoices=invoices,
+        grand_total=grand_total,
+    )
+    pdf_bytes = WeasyHTML(string=html_string).write_pdf()
+    if not pdf_bytes:
+        return redirect("/")
+    filename = f"FY{year}-{next_yy}_Summary.pdf"
+    return send_file(
+        io.BytesIO(pdf_bytes),
+        PDF_MIME_TYPE,
+        True,
+        filename,
+    )
 
 
 @app.route("/delete_invoice/<int:invoice_id>", methods=["POST"])
@@ -70,7 +150,10 @@ def save() -> werkzeug.wrappers.Response:
         return redirect("/")
     invoice: Invoice = pickle.loads(session["invoice"])
     store: Store = app.config[FLASK_CONFIG_STORE_KEY]
-    store.save_invoice(invoice)
+    try:
+        store.save_invoice(invoice)
+    except DuplicateInvoiceNumberError as e:
+        session["error"] = str(e)
     session["active-tab"] = "form-tab"
     return redirect("/")
 
@@ -124,14 +207,17 @@ def config() -> werkzeug.wrappers.Response:
 @auth_required
 def process_invoice() -> str:
     store: Store = app.config[FLASK_CONFIG_STORE_KEY]
+    today = date.today()
+    years = tuple(range(today.year, today.year - 5, -1))
     form_data: dict[str, Any] = {
         "months": MONTHS,
-        "years": YEARS,
-        "month": TODAY.month,
-        "year": TODAY.year,
-        "financial-year": TODAY.year - 1,
+        "years": years,
+        "month": today.month,
+        "year": today.year,
+        "financial-year": today.year - 1,
         "display-form": "block",
         "invoice-number": store.get_next_invoice_number(),
+        "invoice-date": today.isoformat(),
         "active-tab": session.get("active-tab") or "form-tab",
     }
 
@@ -143,9 +229,16 @@ def process_invoice() -> str:
 
     invoice_number = int(form_data["invoice-number"])
 
+    invoice_date_str = form_data.get("invoice-date")
+    if invoice_date_str:
+        invoice_date = date.fromisoformat(str(invoice_date_str))
+    else:
+        invoice_date = today
+
     if "invoice" in session:
         invoice: Invoice = pickle.loads(session["invoice"])
         invoice.invoice_number = invoice_number
+        invoice.invoice_date = invoice_date
         invoice.period_start = period_start
         invoice.period_end = period_end
         invoice.company = store.config.company
@@ -157,6 +250,7 @@ def process_invoice() -> str:
             store.config.client,
             period_start,
             period_end,
+            invoice_date=invoice_date,
         )
 
     invoice.time_entries = store.get_time_entries(
@@ -167,12 +261,14 @@ def process_invoice() -> str:
     invoices = store.get_invoices(int(form_data["financial-year"]))
     invoices_total = sum(invoice["total"] for invoice in invoices)
     config_str = json.dumps(store.config._config, indent=4)
+    error = session.pop("error", None)
 
     return invoice.html(
         form_data=form_data,
         invoices=invoices,
         invoices_total=invoices_total,
         config=config_str,
+        error=error,
     )
 
 
@@ -247,14 +343,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--year",
         type=int,
-        default=TODAY.year,
+        default=date.today().year,
         metavar="INT",
         help="invoice period year (%(default)s) ",
     )
     parser.add_argument(
         "--month",
         type=int,
-        default=TODAY.month,
+        default=date.today().month,
         metavar="INT",
         choices=range(1, 13),
         help="invoice period month between 1-12 (%(default)s)",
