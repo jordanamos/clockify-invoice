@@ -71,9 +71,18 @@ class ClockifyClient:
         self,
         workspace_id: str,
         user_id: str,
+        page_size: int = 50,
     ) -> list[dict[str, Any]]:
         path = f"workspaces/{workspace_id}/user/{user_id}/time-entries"
-        return self.session.get(path)
+        results: list[dict[str, Any]] = []
+        page = 1
+        while True:
+            page_results = self.session.get(f"{path}?page={page}&page-size={page_size}")
+            results.extend(page_results)
+            if len(page_results) < page_size:
+                break
+            page += 1
+        return results
 
 
 class ClockifyAPIException(Exception):
