@@ -84,6 +84,58 @@ def synch_workspaces(api_session: ClockifyClient, db: sqlite3.Connection) -> Non
     db.executemany("INSERT INTO workspace VALUES(?,?)", workspaces_data)
 
 
+def _split_entry_by_month(
+    entry_id: str,
+    start_time: datetime,
+    end_time: datetime,
+    desc: str,
+    user_id: str,
+    workspace_id: str,
+) -> list[tuple[Any, ...]]:
+    """Split a time entry at month boundaries into one or more DB rows."""
+    segments = []
+    seg_start = start_time
+    while True:
+        if seg_start.month == 12:
+            next_month = seg_start.replace(
+                year=seg_start.year + 1,
+                month=1,
+                day=1,
+                hour=0,
+                minute=0,
+                second=0,
+                microsecond=0,
+            )
+        else:
+            next_month = seg_start.replace(
+                month=seg_start.month + 1,
+                day=1,
+                hour=0,
+                minute=0,
+                second=0,
+                microsecond=0,
+            )
+        seg_end = min(end_time, next_month)
+        segments.append((seg_start, seg_end))
+        if seg_end >= end_time:
+            break
+        seg_start = next_month
+
+    fmt = Store._DATE_FORMAT
+    return [
+        (
+            entry_id if len(segments) == 1 else f"{entry_id}_{i}",
+            datetime.strftime(s, fmt),
+            datetime.strftime(e, fmt),
+            (e - s).total_seconds(),
+            desc,
+            user_id,
+            workspace_id,
+        )
+        for i, (s, e) in enumerate(segments)
+    ]
+
+
 def synch_time_entries(
     api_session: ClockifyClient,
     db: sqlite3.Connection,
@@ -109,23 +161,12 @@ def synch_time_entries(
 
         entry_id = te["id"]
         desc = te["description"]
-        start = te["timeInterval"]["start"]
-        start_time = _convert_datestr(start)
+        start_time = _convert_datestr(te["timeInterval"]["start"])
         end_time = _convert_datestr(end)
-        start_time_formatted = datetime.strftime(start_time, Store._DATE_FORMAT)
-        end_time_formatted = datetime.strftime(end_time, Store._DATE_FORMAT)
 
-        duration_secs = (end_time - start_time).total_seconds()
-
-        data.append(
-            (
-                entry_id,
-                start_time_formatted,
-                end_time_formatted,
-                duration_secs,
-                desc,
-                user_id,
-                workspace_id,
+        data.extend(
+            _split_entry_by_month(
+                entry_id, start_time, end_time, desc, user_id, workspace_id
             )
         )
     db.executemany("INSERT INTO time_entry VALUES(?,?,?,?,?,?,?)", data)

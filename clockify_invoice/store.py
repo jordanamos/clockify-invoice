@@ -24,7 +24,7 @@ FROM time_entry
 WHERE user = ?
     AND workspace = ?
     AND start_time >= ?
-    AND end_time < ?
+    AND start_time < ?
     AND duration_seconds > 0
 GROUP BY description
 """
@@ -72,18 +72,13 @@ class Store:
         self._create_db_if_not_exists()
         self.config = Config(config_file)
 
-
     def _initialise(self) -> None:
         if not os.path.exists(self.directory):
             os.makedirs(self.directory, exist_ok=True)
-            logger.info(
-                f"Created store directory '{self.directory}'"
-            )
+            logger.info(f"Created store directory '{self.directory}'")
         if not os.path.exists(self.config_file):
             Config.createConfig(self.config_file)
-            logger.info(
-                f"Created config file '{self.config_file}'"
-            )
+            logger.info(f"Created config file '{self.config_file}'")
         logger.info(f"Using store directory: {self.directory}")
 
     @staticmethod
