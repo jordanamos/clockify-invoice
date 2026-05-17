@@ -16,6 +16,11 @@ from clockify_invoice.invoice import TimeEntry
 
 logger = logging.getLogger("clockify-invoice")
 
+
+class DuplicateInvoiceNumberError(Exception):
+    pass
+
+
 _TIME_ENTRIES_QUERY = """\
 SELECT MAX(end_time) AS date
     , description
@@ -133,6 +138,9 @@ class Store:
                     pdf TEXT,
                     pickle TEXT
                 );
+
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_invoice_number
+                    ON invoice(number);
                 """
             )
 
@@ -204,6 +212,18 @@ class Store:
         return entries
 
     def save_invoice(self, invoice: Invoice) -> None:
+        cols = (
+            "number",
+            "date",
+            "period_start",
+            "period_end",
+            "payer",
+            "payee",
+            "total",
+            "paid",
+            "pdf",
+            "pickle",
+        )
         invoice_data = (
             invoice.invoice_number,
             invoice.invoice_date,
@@ -216,22 +236,15 @@ class Store:
             base64.b64encode(invoice.pdf()).decode(),
             base64.b64encode(pickle.dumps(invoice)).decode(),
         )
-        with self.connect() as db:
-            cols = (
-                "number",
-                "date",
-                "period_start",
-                "period_end",
-                "payer",
-                "payee",
-                "total",
-                "paid",
-                "pdf",
-                "pickle",
-            )
-            db.execute(
-                f"INSERT INTO invoice({','.join(cols)}) VALUES(?,?,?,?,?,?,?,?,?,?)",
-                invoice_data,
+        try:
+            with self.connect() as db:
+                db.execute(
+                    f"INSERT INTO invoice({','.join(cols)}) VALUES(?,?,?,?,?,?,?,?,?,?)",  # NOQA: E501
+                    invoice_data,
+                )
+        except sqlite3.IntegrityError:
+            raise DuplicateInvoiceNumberError(
+                f"Invoice number {invoice.invoice_number} already exists"
             )
 
     def get_invoices(self, financial_year: int) -> list[dict[str, Any]]:

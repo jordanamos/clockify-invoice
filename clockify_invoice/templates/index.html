@@ -116,6 +116,12 @@
   </head>
   <body>
     <div class="container-lg">
+      {% if error %}
+      <div class="alert alert-danger alert-dismissible fade show mt-2" role="alert">
+        {{ error }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+      {% endif %}
       <div class="row">
         <div
           class="col-md-4 my-2"

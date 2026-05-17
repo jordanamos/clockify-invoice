@@ -7,7 +7,6 @@ import pickle
 import zipfile
 from collections.abc import Sequence
 from datetime import date
-from datetime import datetime
 from typing import Any
 from typing import Literal
 
@@ -18,12 +17,12 @@ from flask import render_template
 from flask import request
 from flask import send_file
 from flask import session
-
 from weasyprint import HTML as WeasyHTML
 
 from clockify_invoice.config import Config
 from clockify_invoice.config import ConfigError
 from clockify_invoice.invoice import Invoice
+from clockify_invoice.store import DuplicateInvoiceNumberError
 from clockify_invoice.store import Store
 from clockify_invoice.utils import auth_required
 from clockify_invoice.utils import get_period_dates
@@ -151,7 +150,10 @@ def save() -> werkzeug.wrappers.Response:
         return redirect("/")
     invoice: Invoice = pickle.loads(session["invoice"])
     store: Store = app.config[FLASK_CONFIG_STORE_KEY]
-    store.save_invoice(invoice)
+    try:
+        store.save_invoice(invoice)
+    except DuplicateInvoiceNumberError as e:
+        session["error"] = str(e)
     session["active-tab"] = "form-tab"
     return redirect("/")
 
@@ -259,12 +261,14 @@ def process_invoice() -> str:
     invoices = store.get_invoices(int(form_data["financial-year"]))
     invoices_total = sum(invoice["total"] for invoice in invoices)
     config_str = json.dumps(store.config._config, indent=4)
+    error = session.pop("error", None)
 
     return invoice.html(
         form_data=form_data,
         invoices=invoices,
         invoices_total=invoices_total,
         config=config_str,
+        error=error,
     )
 
 
